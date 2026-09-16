@@ -1,36 +1,26 @@
 # ============================================================
-# STREAMLIT APP CONFIGURATION
-# FORCE DARK EXPERIENCE
+# STREAMLIT CLOUD CONFIG
+# PERMANENT DARK EXPERIENCE
 # ============================================================
-
-
-# ------------------------------------------------------------
-# CLIENT
-# ------------------------------------------------------------
 
 [client]
 
-# Hide developer/settings options as much as possible.
-# This prevents normal public users from easily switching theme.
+# Hide Streamlit settings/menu as much as Streamlit permits.
 toolbarMode = "minimal"
 
-# Do not expose detailed Python errors to public users.
 showErrorDetails = "none"
 
-# This project does not use Streamlit's pages/ directory.
-showSidebarNavigation = false
-
-# Hide external help links in error screens.
 showErrorLinks = false
 
+showSidebarNavigation = false
 
-# ------------------------------------------------------------
-# MAIN THEME
-# ------------------------------------------------------------
+
+# ============================================================
+# DEFAULT THEME
+# ============================================================
 
 [theme]
 
-# Always start from Streamlit's native dark theme.
 base = "dark"
 
 primaryColor = "#2F7CF6"
@@ -42,10 +32,6 @@ secondaryBackgroundColor = "#0B192B"
 textColor = "#E8F0FB"
 
 linkColor = "#38BDF8"
-
-baseRadius = "medium"
-
-buttonRadius = "medium"
 
 borderColor = "#1E334D"
 
@@ -70,15 +56,8 @@ chartCategoricalColors = [
 
 
 # ============================================================
-# FORCE "LIGHT" MODE TO LOOK DARK
-# ============================================================
-#
-# Streamlit allows users to choose Light or Dark.
-# Therefore we deliberately configure the Light variant
-# with the SAME dark palette.
-#
-# Even if a browser/user tries to activate Light,
-# the visual result remains dark.
+# IMPORTANT:
+# EVEN IF USER SELECTS "LIGHT", MAKE IT DARK
 # ============================================================
 
 [theme.light]
@@ -114,7 +93,7 @@ chartCategoricalColors = [
 
 
 # ============================================================
-# DARK MODE
+# DARK THEME
 # ============================================================
 
 [theme.dark]
@@ -169,7 +148,7 @@ borderColor = "#1E334D"
 
 
 # ============================================================
-# FORCE LIGHT SIDEBAR TO REMAIN DARK
+# LIGHT SIDEBAR IS ALSO DARK
 # ============================================================
 
 [theme.light.sidebar]
@@ -215,8 +194,6 @@ borderColor = "#1E334D"
 headless = true
 
 enableXsrfProtection = true
-
-maxUploadSize = 50
 
 runOnSave = false
 
