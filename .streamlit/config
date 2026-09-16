@@ -1,14 +1,230 @@
+# ============================================================
+# STREAMLIT APP CONFIGURATION
+# FORCE DARK EXPERIENCE
+# ============================================================
+
+
+# ------------------------------------------------------------
+# CLIENT
+# ------------------------------------------------------------
+
+[client]
+
+# Hide developer/settings options as much as possible.
+# This prevents normal public users from easily switching theme.
+toolbarMode = "minimal"
+
+# Do not expose detailed Python errors to public users.
+showErrorDetails = "none"
+
+# This project does not use Streamlit's pages/ directory.
+showSidebarNavigation = false
+
+# Hide external help links in error screens.
+showErrorLinks = false
+
+
+# ------------------------------------------------------------
+# MAIN THEME
+# ------------------------------------------------------------
+
 [theme]
+
+# Always start from Streamlit's native dark theme.
 base = "dark"
+
 primaryColor = "#2F7CF6"
+
 backgroundColor = "#07111F"
+
 secondaryBackgroundColor = "#0B192B"
+
 textColor = "#E8F0FB"
-font = "sans serif"
+
+linkColor = "#38BDF8"
+
+baseRadius = "medium"
+
+buttonRadius = "medium"
+
+borderColor = "#1E334D"
+
+dataframeBorderColor = "#1E334D"
+
+dataframeHeaderBackgroundColor = "#10223A"
+
+showWidgetBorder = true
+
+showSidebarBorder = true
+
+chartCategoricalColors = [
+    "#2F7CF6",
+    "#22C55E",
+    "#EF4444",
+    "#F59E0B",
+    "#8B5CF6",
+    "#22D3EE",
+    "#14B8A6",
+    "#F97316"
+]
+
+
+# ============================================================
+# FORCE "LIGHT" MODE TO LOOK DARK
+# ============================================================
+#
+# Streamlit allows users to choose Light or Dark.
+# Therefore we deliberately configure the Light variant
+# with the SAME dark palette.
+#
+# Even if a browser/user tries to activate Light,
+# the visual result remains dark.
+# ============================================================
+
+[theme.light]
+
+primaryColor = "#2F7CF6"
+
+backgroundColor = "#07111F"
+
+secondaryBackgroundColor = "#0B192B"
+
+textColor = "#E8F0FB"
+
+linkColor = "#38BDF8"
+
+borderColor = "#1E334D"
+
+dataframeBorderColor = "#1E334D"
+
+dataframeHeaderBackgroundColor = "#10223A"
+
+showWidgetBorder = true
+
+chartCategoricalColors = [
+    "#2F7CF6",
+    "#22C55E",
+    "#EF4444",
+    "#F59E0B",
+    "#8B5CF6",
+    "#22D3EE",
+    "#14B8A6",
+    "#F97316"
+]
+
+
+# ============================================================
+# DARK MODE
+# ============================================================
+
+[theme.dark]
+
+primaryColor = "#2F7CF6"
+
+backgroundColor = "#07111F"
+
+secondaryBackgroundColor = "#0B192B"
+
+textColor = "#E8F0FB"
+
+linkColor = "#38BDF8"
+
+borderColor = "#1E334D"
+
+dataframeBorderColor = "#1E334D"
+
+dataframeHeaderBackgroundColor = "#10223A"
+
+showWidgetBorder = true
+
+chartCategoricalColors = [
+    "#2F7CF6",
+    "#22C55E",
+    "#EF4444",
+    "#F59E0B",
+    "#8B5CF6",
+    "#22D3EE",
+    "#14B8A6",
+    "#F97316"
+]
+
+
+# ============================================================
+# SIDEBAR
+# ============================================================
+
+[theme.sidebar]
+
+primaryColor = "#2F7CF6"
+
+backgroundColor = "#081421"
+
+secondaryBackgroundColor = "#10223A"
+
+textColor = "#E8F0FB"
+
+linkColor = "#38BDF8"
+
+borderColor = "#1E334D"
+
+
+# ============================================================
+# FORCE LIGHT SIDEBAR TO REMAIN DARK
+# ============================================================
+
+[theme.light.sidebar]
+
+primaryColor = "#2F7CF6"
+
+backgroundColor = "#081421"
+
+secondaryBackgroundColor = "#10223A"
+
+textColor = "#E8F0FB"
+
+linkColor = "#38BDF8"
+
+borderColor = "#1E334D"
+
+
+# ============================================================
+# DARK SIDEBAR
+# ============================================================
+
+[theme.dark.sidebar]
+
+primaryColor = "#2F7CF6"
+
+backgroundColor = "#081421"
+
+secondaryBackgroundColor = "#10223A"
+
+textColor = "#E8F0FB"
+
+linkColor = "#38BDF8"
+
+borderColor = "#1E334D"
+
+
+# ============================================================
+# SERVER
+# ============================================================
 
 [server]
-maxUploadSize = 50
+
+headless = true
+
 enableXsrfProtection = true
 
+maxUploadSize = 50
+
+runOnSave = false
+
+
+# ============================================================
+# BROWSER
+# ============================================================
+
 [browser]
+
 gatherUsageStats = false
