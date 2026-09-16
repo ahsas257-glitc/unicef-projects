@@ -14,7 +14,17 @@
   --amber: #f59e0b;
   --purple: #8b5cf6;
 }
+html {
+    color-scheme: dark !important;
+}
 
+html,
+body,
+.stApp,
+[data-testid="stAppViewContainer"] {
+    background-color: #07111F !important;
+    color: #E8F0FB !important;
+}
 html, body, [class*="css"] {
   font-family: 'Inter', 'Segoe UI', sans-serif;
 }
