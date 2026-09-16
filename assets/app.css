@@ -24,6 +24,11 @@ body,
 [data-testid="stAppViewContainer"] {
     background-color: #07111F !important;
     color: #E8F0FB !important;
+input,
+textarea,
+select {
+    color-scheme: dark !important;
+}
 }
 html, body, [class*="css"] {
   font-family: 'Inter', 'Segoe UI', sans-serif;
