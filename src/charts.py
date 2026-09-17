@@ -24,13 +24,140 @@ def _layout(fig, height=380, margin=None):
         plot_bgcolor=BG,
         font=dict(family="Inter, Segoe UI, sans-serif", color=TEXT, size=12),
         margin=margin or dict(l=15, r=15, t=55, b=15),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
+def _layout(
+    fig,
+    height=390,
+    margin=None,
+):
+    """
+    Apply the global visual style to every Plotly chart.
+
+    The top margin and legend position are intentionally spacious
+    so chart titles and legends never collide.
+    """
+
+    fig.update_layout(
+
+        height=height,
+
+        paper_bgcolor=BG,
+
+        plot_bgcolor=BG,
+
+        font=dict(
+            family="Inter, Segoe UI, sans-serif",
+            color=TEXT,
+            size=12,
+        ),
+
+        # ----------------------------------------------------
+        # TITLE
+        # ----------------------------------------------------
+
+        title=dict(
+            x=0.02,
+            y=0.97,
+
             xanchor="left",
-            x=0,
-            font=dict(color=MUTED),
+            yanchor="top",
+
+            font=dict(
+                size=17,
+                color="#F8FBFF",
+            ),
+
+            pad=dict(
+                t=4,
+                b=14,
+            ),
+        ),
+
+        # ----------------------------------------------------
+        # MARGINS
+        # ----------------------------------------------------
+
+        margin=(
+            margin
+            or dict(
+                l=20,
+                r=20,
+                t=95,
+                b=22,
+            )
+        ),
+
+        # ----------------------------------------------------
+        # LEGEND
+        # ----------------------------------------------------
+
+        legend=dict(
+
+            orientation="h",
+
+            # Put legend below the title instead of beside it.
+            yanchor="bottom",
+
+            y=1.01,
+
+            xanchor="left",
+
+            x=0.02,
+
+            font=dict(
+                color=MUTED,
+                size=11,
+            ),
+
+            bgcolor="rgba(0,0,0,0)",
+
+            borderwidth=0,
+
+            itemclick="toggle",
+
+            itemdoubleclick="toggleothers",
+        ),
+
+        # ----------------------------------------------------
+        # HOVER
+        # ----------------------------------------------------
+
+        hoverlabel=dict(
+            bgcolor="#0B192B",
+            font_color="white",
+            bordercolor="#1E334D",
+        ),
+    )
+
+
+    fig.update_xaxes(
+        gridcolor=GRID,
+        zerolinecolor=GRID,
+
+        tickfont=dict(
+            color=MUTED,
+        ),
+
+        title_font=dict(
+            color=MUTED,
+        ),
+    )
+
+
+    fig.update_yaxes(
+        gridcolor=GRID,
+        zerolinecolor=GRID,
+
+        tickfont=dict(
+            color=MUTED,
+        ),
+
+        title_font=dict(
+            color=MUTED,
+        ),
+    )
+
+
+    return fig
         ),
         hoverlabel=dict(bgcolor="#0F172A", font_color="white"),
     )
