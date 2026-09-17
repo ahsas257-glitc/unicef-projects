@@ -1,183 +1,64 @@
-# UNICEF Advanced Streamlit Cloud Dashboard
+# UNICEF Ultra-Modern Streamlit Portfolio Intelligence
 
-This package is a production-oriented public dashboard connected directly to the Google Sheet:
+A production-ready public Streamlit dashboard connected directly to the internal project tabs of the central Google Sheet.
 
-`1wtRzWbJ5uGdc5pqc9KJnauPuFnVQauL31VE9mX-LJ_U`
+## Data source
 
-## Critical data architecture
+The app reads only these tabs from Google Sheet `1wtRzWbJ5uGdc5pqc9KJnauPuFnVQauL31VE9mX-LJ_U`:
 
-The app reads **only the internal project tabs** of that Google Sheet:
-
-- `CBE`
-- `Public Schools`
-- `ECE`
-- `TLS`
-- `VT`
-- `VT_KII_FGD`
-- `Moraa`
-
-It does **not** read `Dashboard`, `Dashboard_Data`, or the external source spreadsheets.
-
-That means the Google Sheet remains the central data-control layer, while Streamlit is the modern public visualization layer.
-
-## Public-dashboard privacy
-
-The app is designed for a public deployment.
-
-For that reason:
-- Beneficiary names and phone numbers are not displayed.
-- Field staff and QA staff are pseudonymized in performance charts.
-- The public record explorer only exposes non-sensitive operational fields.
-- Google service-account credentials stay in Streamlit Secrets and never go into GitHub.
-
-## Main capabilities
-
-### Executive overview
-- Total scope
-- Received
-- Approved
-- Rejected
-- Pending QA
-- Overall completion
-- Approval rate
-- QC reviewed rate
-- Remaining scope
-- Automatic management insights
-- Portfolio health matrix
-
-### Project filtering
-The user can switch between:
-- All Projects
 - CBE
 - Public Schools
-- Moraa
-- VT
-- TLS
 - ECE
+- TLS
+- VT
+- VT_KII_FGD
+- Moraa
 
-The selected project is also stored in the URL query parameter so a project view can be shared.
+The app does **not** calculate KPI values from `Dashboard` or `Dashboard_Data`.
 
-### Dedicated project deep dive
-Each project gets a complete dashboard.
+## Major capabilities
 
-- CBE / Public Schools / ECE / TLS:
-  - monthly trend
-  - province status
-  - QA component profile
-  - rejection Pareto
-  - tool/instrument mix
-  - QA reviewer distribution
-
-- VT:
-  - VT tool risk map
-  - tool-level received / approved / rejected / pending
-  - province analysis
-  - monthly trend
-  - rejection Pareto
-  - KII / FGD automatically included under VT
-
-- Moraa:
-  - phase analysis
-  - discipline analysis
-  - gender analysis
-  - phase → discipline → status sunburst
-  - monthly trend
-
-### Quality intelligence
+- Dark-only premium public interface
+- Responsive laptop and large-monitor layout
+- Executive KPI layer
+- Scope-completion gauge
+- QA-status donut
+- Portfolio performance radar
+- Health matrix
+- Scope treemap
+- Portfolio delivery funnel
+- Remaining-scope pressure chart
+- Monthly spline trends
+- Collection intensity heatmap
+- VT tool risk map
+- Province quality-vs-volume analytics
 - Rejection Pareto
-- Field-staff performance map
-- Approval / rejection / backlog metrics
-- Missing rejection reason
-- Future-dated records
-- Undated VT KII/FGD
-
-### Geography and trends
-- Province status mix
-- Monthly received / approved / rejected / pending
-- Province performance table
-
-### Public data explorer
-- Privacy-safe filtered rows
+- Field-staff performance map with pseudonymized identities
+- QA reviewer workload/outcome chart
+- Moraa phase/discipline/status sunburst
+- Project-specific deep dives
+- Province and district analytics
+- Privacy-safe public data explorer
 - CSV download
-- No beneficiary PII
+- URL-shareable project view
+- 5-minute live Google Sheets cache plus manual refresh
 
-## Google Sheets connection
+## Dark-only behavior
 
-The app uses the Google Sheets API through a **read-only service account**.
+This package pins `streamlit==1.63.0`, defines both light and dark variants with the same dark palette, uses minimal toolbar mode, and adds a CSS dark lock. Public viewers therefore remain in the dark visual system even if their device/browser preference is light.
 
-### 1. Create a Google Cloud project
-Enable:
+## Public privacy
 
-`Google Sheets API`
+Beneficiary names and phone numbers are not included in the public explorer. Field and QA staff identities are pseudonymized in performance views.
 
-### 2. Create a Service Account
-Download its JSON key.
+## Deployment
 
-### 3. Share the Google Sheet
-Share the Google Sheet with the service-account email as **Viewer**.
+1. Upload the entire project to a private GitHub repository.
+2. Enable Google Sheets API in Google Cloud.
+3. Create a service account and JSON key.
+4. Share the central Google Sheet with the service-account email as Viewer.
+5. Put the credential values into Streamlit Cloud → App → Settings → Secrets, using `.streamlit/secrets.example.toml` as the exact structure.
+6. Set the Streamlit main file to `app.py`.
+7. Deploy and reboot once after the first deployment.
 
-### 4. Configure Streamlit Secrets
-In Streamlit Community Cloud:
-
-`App → Settings → Secrets`
-
-Copy the structure from:
-
-`.streamlit/secrets.example.toml`
-
-and replace the placeholders with the real service-account values.
-
-Never upload the real private key to GitHub.
-
-## Deploy to Streamlit Community Cloud
-
-1. Create a private GitHub repository.
-2. Upload the project files.
-3. Go to Streamlit Community Cloud.
-4. Create a new app.
-5. Select the repository.
-6. Main file: `app.py`
-7. Add the Secrets.
-8. Deploy.
-
-## Local run
-
-```bash
-python -m venv .venv
-```
-
-Windows:
-
-```bash
-.venv\Scripts\activate
-```
-
-Install:
-
-```bash
-pip install -r requirements.txt
-```
-
-Run:
-
-```bash
-streamlit run app.py
-```
-
-## Cache / refresh behavior
-
-The Google Sheet is cached for 5 minutes for performance.
-
-The user can click:
-
-`Refresh live data`
-
-to clear the cache immediately.
-
-## Scope targets
-
-The current 2026 scope targets are stored in:
-
-`src/config.py`
-
-They are reference targets only. All live counts, statuses, trends and QA metrics are calculated from the Google Sheet project tabs.
+Never commit a real `secrets.toml` or private key to GitHub.
