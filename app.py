@@ -15,7 +15,6 @@ from src.config import (
 )
 
 from src.google_sheets import load_google_sheet
-
 from src.data_model import build_master_dataset
 
 from src.analytics import (
@@ -91,7 +90,7 @@ st.set_page_config(
 
 
 # ============================================================
-# DARK MODE + FRONTEND
+# FRONTEND / DARK MODE
 # ============================================================
 
 force_dark_mode()
@@ -99,7 +98,7 @@ inject_css()
 
 
 # ============================================================
-# CHART RENDERER
+# PLOTLY RENDERER
 # ============================================================
 
 def render_chart(
@@ -109,10 +108,7 @@ def render_chart(
     modebar: bool = False,
 ) -> None:
     """
-    Render Plotly charts with a unique Streamlit element key.
-
-    Using a unique key for every chart prevents:
-    StreamlitDuplicateElementId
+    Render Plotly figures with a guaranteed unique Streamlit key.
     """
 
     st.plotly_chart(
@@ -129,7 +125,36 @@ def render_chart(
 
 
 # ============================================================
-# HERO HEADER
+# CONTEXT BAR
+# ============================================================
+
+def render_context_bar(
+    year: int,
+    project: str,
+    latest_date: str,
+    row_count: int,
+    refreshed: str,
+) -> None:
+    """
+    Render dashboard context badges with st.html() instead of
+    st.markdown(), preventing HTML from appearing as raw text.
+    """
+
+    html = (
+        '<div class="context-strip">'
+        f'{pill(f"Year {year}")}'
+        f'{pill(project)}'
+        f'{pill(f"Latest data: {latest_date}")}'
+        f'{pill(f"Rows in current view: {row_count:,}")}'
+        f'{pill(f"Refreshed: {refreshed}")}'
+        '</div>'
+    )
+
+    st.html(html)
+
+
+# ============================================================
+# HERO
 # ============================================================
 
 hero(
@@ -190,7 +215,7 @@ except Exception as exc:
 
 
 # ============================================================
-# BUILD MASTER DATA MODEL
+# BUILD MASTER DATASET
 # ============================================================
 
 master, model_meta = build_master_dataset(
@@ -202,7 +227,7 @@ if master.empty:
 
     show_empty_state(
         "No usable records were found.",
-        "Check the project sheet names, column headers and source data.",
+        "Check the project tabs, column headers and source data.",
     )
 
     st.stop()
@@ -213,8 +238,8 @@ if master.empty:
 # ============================================================
 
 years = sorted(
-    int(x)
-    for x in master["year"].dropna().unique()
+    int(value)
+    for value in master["year"].dropna().unique()
 )
 
 
@@ -222,10 +247,11 @@ if not years:
     years = [DEFAULT_YEAR]
 
 
-if DEFAULT_YEAR in years:
-    default_year = DEFAULT_YEAR
-else:
-    default_year = max(years)
+default_year = (
+    DEFAULT_YEAR
+    if DEFAULT_YEAR in years
+    else max(years)
+)
 
 
 # ============================================================
@@ -234,29 +260,26 @@ else:
 
 query_project = None
 
-try:
 
-    query_project = st.query_params.get(
-        "project"
-    )
+try:
+    query_project = st.query_params.get("project")
 
 except Exception:
-
     query_project = None
 
 
-project_options = (
-    ["All Projects"]
-    + PROJECTS
-)
+project_options = [
+    "All Projects",
+    *PROJECTS,
+]
 
 
-default_project_idx = 0
+default_project_index = 0
 
 
 if query_project in PROJECTS:
 
-    default_project_idx = (
+    default_project_index = (
         project_options.index(
             query_project
         )
@@ -273,6 +296,7 @@ with st.sidebar:
         "#### GLOBAL FILTERS"
     )
 
+
     selected_year = st.selectbox(
         "Reporting year",
         years,
@@ -282,16 +306,17 @@ with st.sidebar:
         key="filter_reporting_year",
     )
 
+
     selected_project = st.selectbox(
         "Project view",
         project_options,
-        index=default_project_idx,
+        index=default_project_index,
         key="filter_project_view",
     )
 
 
     # --------------------------------------------------------
-    # UPDATE URL
+    # PROJECT IN URL
     # --------------------------------------------------------
 
     try:
@@ -308,7 +333,6 @@ with st.sidebar:
             )
 
     except Exception:
-
         pass
 
 
@@ -333,9 +357,6 @@ year_mask = (
 )
 
 
-# Undated KII / FGD have no year,
-# but can optionally remain in VT aggregate totals.
-
 if include_undated_vt:
 
     year_mask |= (
@@ -348,7 +369,9 @@ if include_undated_vt:
 
 
 year_df = (
-    master.loc[year_mask]
+    master.loc[
+        year_mask
+    ]
     .copy()
 )
 
@@ -366,22 +389,25 @@ if selected_project != "All Projects":
 
     project_df = (
         project_df[
-            project_df["project"]
-            .eq(selected_project)
+            project_df[
+                "project"
+            ].eq(
+                selected_project
+            )
         ]
         .copy()
     )
 
 
 # ============================================================
-# SIDEBAR ADVANCED FILTERS
+# ADVANCED FILTERS
 # ============================================================
 
 with st.sidebar:
 
     province_values = sorted(
-        x
-        for x
+        value
+        for value
         in project_df[
             "province"
         ]
@@ -389,8 +415,8 @@ with st.sidebar:
         .astype(str)
         .unique()
         if (
-            x.strip()
-            and x != "Unknown"
+            value.strip()
+            and value != "Unknown"
         )
     )
 
@@ -424,8 +450,8 @@ with st.sidebar:
 
 
     tool_values = sorted(
-        x
-        for x
+        value
+        for value
         in project_df[
             "tool_type"
         ]
@@ -433,8 +459,8 @@ with st.sidebar:
         .astype(str)
         .unique()
         if (
-            x.strip()
-            and x != "Unknown"
+            value.strip()
+            and value != "Unknown"
         )
     )
 
@@ -453,8 +479,8 @@ with st.sidebar:
         st.text_input(
             "Search operational fields",
             placeholder=(
-                "Province, district, "
-                "tool, rejection reason..."
+                "Province, district, tool, "
+                "rejection reason..."
             ),
             key="filter_search_text",
         )
@@ -462,7 +488,7 @@ with st.sidebar:
 
 
 # ============================================================
-# APPLY ALL FILTERS
+# APPLY FILTERS
 # ============================================================
 
 filtered = apply_filters(
@@ -475,11 +501,13 @@ filtered = apply_filters(
 
 
 # ============================================================
-# CONTEXT INFORMATION
+# DASHBOARD CONTEXT
 # ============================================================
 
 latest_dated = (
-    year_df["date"]
+    year_df[
+        "date"
+    ]
     .dropna()
     .max()
 )
@@ -512,33 +540,16 @@ refresh_text = (
 )
 
 
-st.markdown(
-    f"""
-    <div class="context-strip">
+# IMPORTANT:
+# st.html() is used here instead of st.markdown().
+# This fixes the raw <span> HTML appearing on screen.
 
-        <span>
-            {pill(f"Year {selected_year}")}
-        </span>
-
-        <span>
-            {pill(selected_project)}
-        </span>
-
-        <span>
-            {pill(f"Latest data: {latest_date_text}")}
-        </span>
-
-        <span>
-            {pill(f"Rows in current view: {len(filtered):,}")}
-        </span>
-
-        <span>
-            {pill(f"Refreshed: {refresh_text}")}
-        </span>
-
-    </div>
-    """,
-    unsafe_allow_html=True,
+render_context_bar(
+    year=selected_year,
+    project=selected_project,
+    latest_date=latest_date_text,
+    row_count=len(filtered),
+    refreshed=refresh_text,
 )
 
 
@@ -578,7 +589,9 @@ with tab_overview:
         PROJECTS
         if selected_project
         == "All Projects"
-        else [selected_project]
+        else [
+            selected_project
+        ]
     )
 
 
@@ -592,24 +605,36 @@ with tab_overview:
 
 
     # --------------------------------------------------------
-    # PORTFOLIO TOTALS
+    # TOTALS
     # --------------------------------------------------------
 
     total_scope = int(
-        summary["Scope"].sum()
+        summary[
+            "Scope"
+        ].sum()
     )
+
 
     total_received = int(
-        summary["Received"].sum()
+        summary[
+            "Received"
+        ].sum()
     )
+
 
     total_approved = int(
-        summary["Approved"].sum()
+        summary[
+            "Approved"
+        ].sum()
     )
 
+
     total_rejected = int(
-        summary["Rejected"].sum()
+        summary[
+            "Rejected"
+        ].sum()
     )
+
 
     total_pending = int(
         summary[
@@ -617,8 +642,11 @@ with tab_overview:
         ].sum()
     )
 
+
     total_remaining = int(
-        summary["Remaining"].sum()
+        summary[
+            "Remaining"
+        ].sum()
     )
 
 
@@ -674,14 +702,14 @@ with tab_overview:
 
 
     # --------------------------------------------------------
-    # KPI SECTION
+    # EXECUTIVE KPIs
     # --------------------------------------------------------
 
     section_header(
         "Executive Snapshot",
         (
-            "A compact management view of "
-            "delivery, quality and scope performance"
+            "A compact management view of delivery, "
+            "quality and scope performance"
         ),
     )
 
@@ -772,11 +800,15 @@ with tab_overview:
 
 
     # --------------------------------------------------------
-    # EXECUTIVE CHARTS
+    # TOP VISUALS
     # --------------------------------------------------------
 
     c1, c2, c3 = st.columns(
-        [1.2, 1.0, 0.9]
+        [
+            1.2,
+            1.0,
+            0.9,
+        ]
     )
 
 
@@ -825,11 +857,14 @@ with tab_overview:
 
 
     # --------------------------------------------------------
-    # RADAR + QUALITY SIGNALS
+    # RADAR / DQ
     # --------------------------------------------------------
 
     c1, c2 = st.columns(
-        [1.2, 1]
+        [
+            1.2,
+            1,
+        ]
     )
 
 
@@ -865,8 +900,8 @@ with tab_overview:
         )
 
 
-        d1, d2 = (
-            st.columns(2)
+        d1, d2 = st.columns(
+            2
         )
 
 
@@ -885,7 +920,9 @@ with tab_overview:
 
             metric_card(
                 "Future-dated",
-                f"{dq['future_dated']:,}",
+                (
+                    f"{dq['future_dated']:,}"
+                ),
                 "Dates later than today",
                 (
                     "red"
@@ -957,7 +994,9 @@ with tab_overview:
                 3,
                 max(
                     1,
-                    len(insights),
+                    len(
+                        insights
+                    ),
                 ),
             )
         )
@@ -976,9 +1015,15 @@ with tab_overview:
         ]:
 
             insight_card(
-                item["title"],
-                item["text"],
-                item["level"],
+                item[
+                    "title"
+                ],
+                item[
+                    "text"
+                ],
+                item[
+                    "level"
+                ],
             )
 
 
@@ -1031,12 +1076,11 @@ with tab_portfolio:
     )
 
 
-    # --------------------------------------------------------
-    # TREEMAP + WATERFALL
-    # --------------------------------------------------------
-
     c1, c2 = st.columns(
-        [1.15, 1]
+        [
+            1.15,
+            1,
+        ]
     )
 
 
@@ -1066,11 +1110,9 @@ with tab_portfolio:
         )
 
 
-    # --------------------------------------------------------
-    # FUNNEL + HEALTH MATRIX
-    # --------------------------------------------------------
-
-    c1, c2 = st.columns(2)
+    c1, c2 = st.columns(
+        2
+    )
 
 
     with c1:
@@ -1100,7 +1142,7 @@ with tab_portfolio:
 
 
     # --------------------------------------------------------
-    # PORTFOLIO TABLE
+    # PROJECT PERFORMANCE TABLE
     # --------------------------------------------------------
 
     section_header(
@@ -1119,27 +1161,13 @@ with tab_portfolio:
                 "Received": "{:,.0f}",
                 "Approved": "{:,.0f}",
                 "Rejected": "{:,.0f}",
-                (
-                    "Pending / "
-                    "Unreviewed"
-                ): "{:,.0f}",
+                "Pending / Unreviewed": "{:,.0f}",
                 "Remaining": "{:,.0f}",
                 "Completion %": "{:.1%}",
-                (
-                    "Collection "
-                    "Coverage %"
-                ): "{:.1%}",
-                (
-                    "Approval "
-                    "Rate %"
-                ): "{:.1%}",
-                (
-                    "Rejection "
-                    "Rate %"
-                ): "{:.1%}",
-                (
-                    "QC Reviewed %"
-                ): "{:.1%}",
+                "Collection Coverage %": "{:.1%}",
+                "Approval Rate %": "{:.1%}",
+                "Rejection Rate %": "{:.1%}",
+                "QC Reviewed %": "{:.1%}",
                 "Backlog %": "{:.1%}",
             }
         ),
@@ -1161,11 +1189,17 @@ with tab_project:
     )
 
 
-    if active_project == "All Projects":
+    if (
+        active_project
+        == "All Projects"
+    ):
 
         active_project = (
             st.selectbox(
-                "Choose a project for the deep dive",
+                (
+                    "Choose a project "
+                    "for the deep dive"
+                ),
                 PROJECTS,
                 key=(
                     "deep_dive_"
@@ -1212,7 +1246,7 @@ with tab_project:
 
 
     # --------------------------------------------------------
-    # PROJECT KPIs
+    # PROJECT KPI CARDS
     # --------------------------------------------------------
 
     (
@@ -1222,14 +1256,18 @@ with tab_project:
         k4,
         k5,
         k6,
-    ) = st.columns(6)
+    ) = st.columns(
+        6
+    )
 
 
     with k1:
 
         metric_card(
             "Received",
-            f"{psummary['Received']:,}",
+            (
+                f"{psummary['Received']:,}"
+            ),
             (
                 f"{psummary['Collection Coverage %']:.1%} "
                 "of scope"
@@ -1242,7 +1280,9 @@ with tab_project:
 
         metric_card(
             "Approved",
-            f"{psummary['Approved']:,}",
+            (
+                f"{psummary['Approved']:,}"
+            ),
             (
                 f"{psummary['Approval Rate %']:.1%} "
                 "approval"
@@ -1255,7 +1295,9 @@ with tab_project:
 
         metric_card(
             "Rejected",
-            f"{psummary['Rejected']:,}",
+            (
+                f"{psummary['Rejected']:,}"
+            ),
             (
                 f"{psummary['Rejection Rate %']:.1%} "
                 "rejected"
@@ -1308,17 +1350,12 @@ with tab_project:
         )
 
 
-    # --------------------------------------------------------
-    # EMPTY PROJECT
-    # --------------------------------------------------------
-
     if deep_df.empty:
 
         show_empty_state(
             (
                 "No records in this "
-                "project for the "
-                "selected year."
+                "project for the selected year."
             ),
             (
                 "Change the year "
@@ -1326,11 +1363,10 @@ with tab_project:
             ),
         )
 
-
     else:
 
         # ----------------------------------------------------
-        # MONTHLY TREND + COMPLETION
+        # MONTHLY
         # ----------------------------------------------------
 
         monthly = (
@@ -1342,7 +1378,10 @@ with tab_project:
 
 
         c1, c2 = st.columns(
-            [1.35, 1]
+            [
+                1.35,
+                1,
+            ]
         )
 
 
@@ -1385,25 +1424,29 @@ with tab_project:
 
 
         # ----------------------------------------------------
-        # PROVINCE + REJECTION
+        # PROVINCES / REJECTION
         # ----------------------------------------------------
 
-        c1, c2 = st.columns(2)
+        c1, c2 = st.columns(
+            2
+        )
 
 
         with c1:
 
-            provinces = (
+            project_provinces = (
                 province_summary(
                     deep_df
                 )
-                .head(18)
+                .head(
+                    18
+                )
             )
 
 
             render_chart(
                 fig_province_status(
-                    provinces,
+                    project_provinces,
                     title=(
                         f"{active_project} "
                         "by Province"
@@ -1419,7 +1462,7 @@ with tab_project:
 
         with c2:
 
-            reasons = (
+            project_reasons = (
                 rejection_summary(
                     deep_df,
                     top_n=12,
@@ -1429,7 +1472,7 @@ with tab_project:
 
             render_chart(
                 fig_rejection_pareto(
-                    reasons,
+                    project_reasons,
                     title=(
                         f"{active_project} "
                         "Rejection Pareto"
@@ -1444,7 +1487,7 @@ with tab_project:
 
 
         # ----------------------------------------------------
-        # PROJECT-SPECIFIC DATA
+        # PROJECT-SPECIFIC BREAKDOWN
         # ----------------------------------------------------
 
         project_breakdowns = (
@@ -1478,7 +1521,10 @@ with tab_project:
 
 
             c1, c2 = st.columns(
-                [1.1, 1]
+                [
+                    1.1,
+                    1,
+                ]
             )
 
 
@@ -1519,18 +1565,9 @@ with tab_project:
             st.dataframe(
                 vt_summary.style.format(
                     {
-                        (
-                            "Approval "
-                            "Rate %"
-                        ): "{:.1%}",
-                        (
-                            "Rejection "
-                            "Rate %"
-                        ): "{:.1%}",
-                        (
-                            "QC "
-                            "Reviewed %"
-                        ): "{:.1%}",
+                        "Approval Rate %": "{:.1%}",
+                        "Rejection Rate %": "{:.1%}",
+                        "QC Reviewed %": "{:.1%}",
                         "Backlog %": "{:.1%}",
                     }
                 ),
@@ -1546,7 +1583,10 @@ with tab_project:
         elif active_project == "Moraa":
 
             c1, c2 = st.columns(
-                [1.15, 1]
+                [
+                    1.15,
+                    1,
+                ]
             )
 
 
@@ -1589,7 +1629,11 @@ with tab_project:
                 )
 
 
-            c1, c2 = st.columns(2)
+            c1, c2 = (
+                st.columns(
+                    2
+                )
+            )
 
 
             with c1:
@@ -1635,13 +1679,13 @@ with tab_project:
 
 
         # ====================================================
-        # CBE / PUBLIC / ECE / TLS
+        # OTHER PROJECTS
         # ====================================================
 
         else:
 
-            c1, c2 = (
-                st.columns(2)
+            c1, c2 = st.columns(
+                2
             )
 
 
@@ -1669,14 +1713,16 @@ with tab_project:
 
             with c2:
 
-                q = quality_summary(
-                    deep_df
+                project_quality = (
+                    quality_summary(
+                        deep_df
+                    )
                 )
 
 
                 render_chart(
                     fig_quality_components(
-                        q,
+                        project_quality,
                         title=(
                             "QA Component "
                             "Profile"
@@ -1690,7 +1736,7 @@ with tab_project:
                 )
 
 
-            qc = (
+            project_qc = (
                 qc_reviewer_summary(
                     deep_df
                 )
@@ -1699,7 +1745,7 @@ with tab_project:
 
             render_chart(
                 fig_qc_reviewer(
-                    qc
+                    project_qc
                 ),
                 key=(
                     "project_"
@@ -1730,18 +1776,17 @@ with tab_quality:
     )
 
 
-    # --------------------------------------------------------
-    # REJECTION + STAFF
-    # --------------------------------------------------------
-
     c1, c2 = st.columns(
-        [1.2, 1]
+        [
+            1.2,
+            1,
+        ]
     )
 
 
     with c1:
 
-        reasons = (
+        quality_reasons = (
             rejection_summary(
                 qdf,
                 top_n=15,
@@ -1751,7 +1796,7 @@ with tab_quality:
 
         render_chart(
             fig_rejection_pareto(
-                reasons,
+                quality_reasons,
                 title=(
                     "Rejection Pareto "
                     "| Current Filter"
@@ -1766,7 +1811,7 @@ with tab_quality:
 
     with c2:
 
-        staff = (
+        quality_staff = (
             staff_summary(
                 qdf,
                 top_n=35,
@@ -1776,7 +1821,7 @@ with tab_quality:
 
         render_chart(
             fig_staff_scatter(
-                staff
+                quality_staff
             ),
             key=(
                 "quality_"
@@ -1785,18 +1830,14 @@ with tab_quality:
         )
 
 
-    # --------------------------------------------------------
-    # QA COMPONENTS + REVIEWERS
-    # --------------------------------------------------------
-
-    c1, c2 = (
-        st.columns(2)
+    c1, c2 = st.columns(
+        2
     )
 
 
     with c1:
 
-        q = (
+        quality_components = (
             quality_summary(
                 qdf
             )
@@ -1805,7 +1846,7 @@ with tab_quality:
 
         render_chart(
             fig_quality_components(
-                q,
+                quality_components,
                 title=(
                     "QA Component "
                     "Profile"
@@ -1820,7 +1861,7 @@ with tab_quality:
 
     with c2:
 
-        qc = (
+        quality_qc = (
             qc_reviewer_summary(
                 qdf
             )
@@ -1829,7 +1870,7 @@ with tab_quality:
 
         render_chart(
             fig_qc_reviewer(
-                qc
+                quality_qc
             ),
             key=(
                 "quality_"
@@ -1859,24 +1900,31 @@ with tab_geo:
     )
 
 
-    prov = (
+    province_data = (
         province_summary(
             geo_df
         )
-        .head(25)
+        .head(
+            25
+        )
     )
 
 
-    pqi = (
+    province_quality = (
         province_quality_index(
             geo_df
         )
-        .head(25)
+        .head(
+            25
+        )
     )
 
 
     c1, c2 = st.columns(
-        [1.15, 1]
+        [
+            1.15,
+            1,
+        ]
     )
 
 
@@ -1884,7 +1932,7 @@ with tab_geo:
 
         render_chart(
             fig_province_status(
-                prov,
+                province_data,
                 title=(
                     "Province "
                     "Status Mix"
@@ -1901,7 +1949,7 @@ with tab_geo:
 
         render_chart(
             fig_province_quality_scatter(
-                pqi
+                province_quality
             ),
             key=(
                 "geography_"
@@ -1910,21 +1958,19 @@ with tab_geo:
         )
 
 
-    # --------------------------------------------------------
-    # DISTRICTS
-    # --------------------------------------------------------
-
-    district = (
+    district_data = (
         district_summary(
             geo_df
         )
-        .head(25)
+        .head(
+            25
+        )
     )
 
 
     render_chart(
         fig_category_bar(
-            district,
+            district_data,
             "District",
             "Records",
             (
@@ -1949,8 +1995,8 @@ with tab_time:
     section_header(
         "Time Intelligence",
         (
-            "Monthly flow, daily intensity and "
-            "calendar-based operational patterns"
+            "Monthly flow, daily intensity "
+            "and calendar-based operational patterns"
         ),
     )
 
@@ -1965,7 +2011,7 @@ with tab_time:
     )
 
 
-    monthly = (
+    time_monthly = (
         monthly_summary(
             time_df,
             selected_year,
@@ -1974,7 +2020,10 @@ with tab_time:
 
 
     c1, c2 = st.columns(
-        [1.2, 1]
+        [
+            1.2,
+            1,
+        ]
     )
 
 
@@ -1982,7 +2031,7 @@ with tab_time:
 
         render_chart(
             fig_monthly_trend(
-                monthly,
+                time_monthly,
                 title=(
                     "Monthly Collection "
                     "& QA Trend"
@@ -1997,7 +2046,7 @@ with tab_time:
 
     with c2:
 
-        cal = (
+        calendar_data = (
             calendar_heatmap_data(
                 time_df,
                 selected_year,
@@ -2007,7 +2056,7 @@ with tab_time:
 
         render_chart(
             fig_calendar_heatmap(
-                cal
+                calendar_data
             ),
             key=(
                 "time_"
@@ -2018,7 +2067,7 @@ with tab_time:
 
 # ============================================================
 # TAB 7
-# PUBLIC DATA EXPLORER
+# DATA EXPLORER
 # ============================================================
 
 with tab_explorer:
@@ -2033,7 +2082,7 @@ with tab_explorer:
     )
 
 
-    safe_cols = [
+    safe_columns = [
         "project",
         "subsource",
         "date",
@@ -2048,10 +2097,10 @@ with tab_explorer:
     ]
 
 
-    safe_cols = [
+    safe_columns = [
         column
         for column
-        in safe_cols
+        in safe_columns
         if column
         in filtered.columns
     ]
@@ -2059,7 +2108,7 @@ with tab_explorer:
 
     public_view = (
         filtered[
-            safe_cols
+            safe_columns
         ]
         .copy()
     )
@@ -2067,8 +2116,7 @@ with tab_explorer:
 
     st.caption(
         (
-            "Records in current "
-            f"filtered view: "
+            "Records in current filtered view: "
             f"{len(public_view):,}"
         )
     )
@@ -2086,11 +2134,7 @@ with tab_explorer:
     )
 
 
-    # --------------------------------------------------------
-    # CSV EXPORT
-    # --------------------------------------------------------
-
-    csv = (
+    csv_data = (
         public_view
         .to_csv(
             index=False
@@ -2106,7 +2150,7 @@ with tab_explorer:
             "Download filtered "
             "public CSV"
         ),
-        data=csv,
+        data=csv_data,
         file_name=(
             "UNICEF_public_dashboard_"
             f"{selected_year}.csv"
