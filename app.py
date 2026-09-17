@@ -78,7 +78,7 @@ from src.ui import (
 
 st.set_page_config(
     page_title="UNICEF Portfolio Intelligence",
-    page_icon="◈",
+    page_icon="0",
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
