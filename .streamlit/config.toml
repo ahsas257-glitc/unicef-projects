@@ -1,207 +1,73 @@
-# ============================================================
-# STREAMLIT CLOUD CONFIG
-# PERMANENT DARK EXPERIENCE
-# ============================================================
-
 [client]
-
-# Hide Streamlit settings/menu as much as Streamlit permits.
 toolbarMode = "minimal"
-
 showErrorDetails = "none"
-
 showErrorLinks = false
-
 showSidebarNavigation = false
 
-
-# ============================================================
-# DEFAULT THEME
-# ============================================================
-
 [theme]
-
 base = "dark"
-
-primaryColor = "#2F7CF6"
-
+primaryColor = "#3B82F6"
 backgroundColor = "#07111F"
-
 secondaryBackgroundColor = "#0B192B"
-
 textColor = "#E8F0FB"
-
 linkColor = "#38BDF8"
-
 borderColor = "#1E334D"
-
 dataframeBorderColor = "#1E334D"
-
 dataframeHeaderBackgroundColor = "#10223A"
-
 showWidgetBorder = true
-
 showSidebarBorder = true
 
-chartCategoricalColors = [
-    "#2F7CF6",
-    "#22C55E",
-    "#EF4444",
-    "#F59E0B",
-    "#8B5CF6",
-    "#22D3EE",
-    "#14B8A6",
-    "#F97316"
-]
-
-
-# ============================================================
-# IMPORTANT:
-# EVEN IF USER SELECTS "LIGHT", MAKE IT DARK
-# ============================================================
-
 [theme.light]
-
-primaryColor = "#2F7CF6"
-
+primaryColor = "#3B82F6"
 backgroundColor = "#07111F"
-
 secondaryBackgroundColor = "#0B192B"
-
 textColor = "#E8F0FB"
-
 linkColor = "#38BDF8"
-
 borderColor = "#1E334D"
-
 dataframeBorderColor = "#1E334D"
-
 dataframeHeaderBackgroundColor = "#10223A"
-
 showWidgetBorder = true
-
-chartCategoricalColors = [
-    "#2F7CF6",
-    "#22C55E",
-    "#EF4444",
-    "#F59E0B",
-    "#8B5CF6",
-    "#22D3EE",
-    "#14B8A6",
-    "#F97316"
-]
-
-
-# ============================================================
-# DARK THEME
-# ============================================================
 
 [theme.dark]
-
-primaryColor = "#2F7CF6"
-
+primaryColor = "#3B82F6"
 backgroundColor = "#07111F"
-
 secondaryBackgroundColor = "#0B192B"
-
 textColor = "#E8F0FB"
-
 linkColor = "#38BDF8"
-
 borderColor = "#1E334D"
-
 dataframeBorderColor = "#1E334D"
-
 dataframeHeaderBackgroundColor = "#10223A"
-
 showWidgetBorder = true
 
-chartCategoricalColors = [
-    "#2F7CF6",
-    "#22C55E",
-    "#EF4444",
-    "#F59E0B",
-    "#8B5CF6",
-    "#22D3EE",
-    "#14B8A6",
-    "#F97316"
-]
-
-
-# ============================================================
-# SIDEBAR
-# ============================================================
-
 [theme.sidebar]
-
-primaryColor = "#2F7CF6"
-
+primaryColor = "#3B82F6"
 backgroundColor = "#081421"
-
 secondaryBackgroundColor = "#10223A"
-
 textColor = "#E8F0FB"
-
 linkColor = "#38BDF8"
-
 borderColor = "#1E334D"
-
-
-# ============================================================
-# LIGHT SIDEBAR IS ALSO DARK
-# ============================================================
 
 [theme.light.sidebar]
-
-primaryColor = "#2F7CF6"
-
+primaryColor = "#3B82F6"
 backgroundColor = "#081421"
-
 secondaryBackgroundColor = "#10223A"
-
 textColor = "#E8F0FB"
-
 linkColor = "#38BDF8"
-
 borderColor = "#1E334D"
-
-
-# ============================================================
-# DARK SIDEBAR
-# ============================================================
 
 [theme.dark.sidebar]
-
-primaryColor = "#2F7CF6"
-
+primaryColor = "#3B82F6"
 backgroundColor = "#081421"
-
 secondaryBackgroundColor = "#10223A"
-
 textColor = "#E8F0FB"
-
 linkColor = "#38BDF8"
-
 borderColor = "#1E334D"
 
-
-# ============================================================
-# SERVER
-# ============================================================
-
 [server]
-
 headless = true
-
 enableXsrfProtection = true
-
 runOnSave = false
-
-
-# ============================================================
-# BROWSER
-# ============================================================
+maxUploadSize = 50
 
 [browser]
-
 gatherUsageStats = false
