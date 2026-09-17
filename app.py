@@ -1,15 +1,23 @@
 from __future__ import annotations
 
-import io
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
 
-from src.config import APP_TITLE, APP_SUBTITLE, PROJECTS, SCOPES, DEFAULT_YEAR
+from src.config import (
+    APP_TITLE,
+    APP_SUBTITLE,
+    PROJECTS,
+    SCOPES,
+    DEFAULT_YEAR,
+)
+
 from src.google_sheets import load_google_sheet
+
 from src.data_model import build_master_dataset
+
 from src.analytics import (
     apply_filters,
     portfolio_summary,
@@ -25,9 +33,10 @@ from src.analytics import (
     project_specific_breakdowns,
     district_summary,
     qc_reviewer_summary,
-    province_quality_index,
     calendar_heatmap_data,
+    province_quality_index,
 )
+
 from src.charts import (
     fig_scope_completion,
     fig_status_mix,
@@ -40,19 +49,19 @@ from src.charts import (
     fig_category_bar,
     fig_sunburst,
     fig_quality_components,
-    fig_speedometer,
     fig_project_radar,
     fig_treemap,
-    fig_funnel,
+    fig_calendar_heatmap,
     fig_waterfall,
+    fig_funnel,
+    fig_speedometer,
     fig_province_quality_scatter,
     fig_qc_reviewer,
-    fig_calendar_heatmap,
 )
+
 from src.ui import (
     inject_css,
     force_dark_mode,
-    panel_title,
     hero,
     metric_card,
     section_header,
@@ -60,147 +69,401 @@ from src.ui import (
     pill,
     footer,
     show_empty_state,
+    panel_title,
 )
+
+
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
 
 st.set_page_config(
     page_title="UNICEF Portfolio Intelligence",
     page_icon="◈",
     layout="wide",
     initial_sidebar_state="expanded",
-    menu_items={"Get Help": None, "Report a bug": None, "About": None},
+    menu_items={
+        "Get Help": None,
+        "Report a bug": None,
+        "About": None,
+    },
 )
+
+
+# ============================================================
+# DARK MODE + FRONTEND
+# ============================================================
 
 force_dark_mode()
 inject_css()
 
-# -----------------------------
-# Header
-# -----------------------------
+
+# ============================================================
+# CHART RENDERER
+# ============================================================
+
+def render_chart(
+    figure,
+    key: str,
+    *,
+    modebar: bool = False,
+) -> None:
+    """
+    Render Plotly charts with a unique Streamlit element key.
+
+    Using a unique key for every chart prevents:
+    StreamlitDuplicateElementId
+    """
+
+    st.plotly_chart(
+        figure,
+        use_container_width=True,
+        config={
+            "displayModeBar": modebar,
+            "displaylogo": False,
+            "responsive": True,
+            "scrollZoom": False,
+        },
+        key=key,
+    )
+
+
+# ============================================================
+# HERO HEADER
+# ============================================================
+
 hero(
     title=APP_TITLE,
     subtitle=APP_SUBTITLE,
     badge="LIVE • GOOGLE SHEETS • PUBLIC INTELLIGENCE",
 )
 
-# -----------------------------
-# Sidebar / data source
-# -----------------------------
-with st.sidebar:
-    st.markdown("### CONTROL CENTER")
-    st.caption("All calculations use the internal project tabs in the connected Google Sheet.")
 
-    if st.button("↻ Refresh live data", use_container_width=True, type="primary"):
+# ============================================================
+# SIDEBAR HEADER
+# ============================================================
+
+with st.sidebar:
+
+    st.markdown("### COMMAND CENTER")
+
+    st.caption(
+        "Live analytics powered exclusively by the internal "
+        "project tabs of the connected Google Sheet."
+    )
+
+    if st.button(
+        "↻ Refresh live data",
+        use_container_width=True,
+        type="primary",
+        key="sidebar_refresh_live_data",
+    ):
         st.cache_data.clear()
         st.rerun()
 
     st.markdown("---")
 
+
+# ============================================================
+# LOAD GOOGLE SHEET
+# ============================================================
+
 try:
+
     sheet_frames, source_meta = load_google_sheet()
+
 except Exception as exc:
-    st.error("The dashboard could not connect to Google Sheets.")
-    st.code(str(exc))
-    st.info(
-        "Add the service-account credentials in Streamlit Cloud → App → Settings → Secrets, "
-        "then share the Google Sheet with the service-account email as Viewer."
+
+    st.error(
+        "The dashboard could not connect to Google Sheets."
     )
+
+    st.code(str(exc))
+
+    st.info(
+        "Check Streamlit Cloud → Settings → Secrets, "
+        "then make sure the Google Sheet is shared with "
+        "the service-account email as Viewer."
+    )
+
     st.stop()
 
-master, model_meta = build_master_dataset(sheet_frames)
+
+# ============================================================
+# BUILD MASTER DATA MODEL
+# ============================================================
+
+master, model_meta = build_master_dataset(
+    sheet_frames
+)
+
 
 if master.empty:
+
     show_empty_state(
-        "No usable records were found in the connected project sheets.",
-        "Check the sheet names and headers in the Google Sheet.",
+        "No usable records were found.",
+        "Check the project sheet names, column headers and source data.",
     )
+
     st.stop()
 
-# -----------------------------
-# Global filters
-# -----------------------------
-years = sorted(int(x) for x in master["year"].dropna().unique())
+
+# ============================================================
+# AVAILABLE YEARS
+# ============================================================
+
+years = sorted(
+    int(x)
+    for x in master["year"].dropna().unique()
+)
+
+
 if not years:
     years = [DEFAULT_YEAR]
 
-default_year = DEFAULT_YEAR if DEFAULT_YEAR in years else max(years)
+
+if DEFAULT_YEAR in years:
+    default_year = DEFAULT_YEAR
+else:
+    default_year = max(years)
+
+
+# ============================================================
+# URL PROJECT PARAMETER
+# ============================================================
 
 query_project = None
-try:
-    query_project = st.query_params.get("project")
-except Exception:
-    pass
 
-project_options = ["All Projects"] + PROJECTS
+try:
+
+    query_project = st.query_params.get(
+        "project"
+    )
+
+except Exception:
+
+    query_project = None
+
+
+project_options = (
+    ["All Projects"]
+    + PROJECTS
+)
+
+
 default_project_idx = 0
+
+
 if query_project in PROJECTS:
-    default_project_idx = project_options.index(query_project)
+
+    default_project_idx = (
+        project_options.index(
+            query_project
+        )
+    )
+
+
+# ============================================================
+# GLOBAL FILTERS
+# ============================================================
 
 with st.sidebar:
-    st.markdown("#### GLOBAL FILTERS")
+
+    st.markdown(
+        "#### GLOBAL FILTERS"
+    )
+
     selected_year = st.selectbox(
         "Reporting year",
         years,
-        index=years.index(default_year),
+        index=years.index(
+            default_year
+        ),
+        key="filter_reporting_year",
     )
 
     selected_project = st.selectbox(
         "Project view",
         project_options,
         index=default_project_idx,
+        key="filter_project_view",
     )
 
+
+    # --------------------------------------------------------
+    # UPDATE URL
+    # --------------------------------------------------------
+
     try:
+
         if selected_project == "All Projects":
-            st.query_params.pop("project", None)
+
+            if "project" in st.query_params:
+                del st.query_params["project"]
+
         else:
-            st.query_params["project"] = selected_project
+
+            st.query_params["project"] = (
+                selected_project
+            )
+
     except Exception:
+
         pass
+
 
     include_undated_vt = st.toggle(
         "Include undated VT KII/FGD in totals",
         value=True,
-        help="These records stay in VT totals but cannot appear in time-trend charts until they have a date.",
+        help=(
+            "Undated KII/FGD records remain in VT totals, "
+            "but cannot appear in date-based visualizations."
+        ),
+        key="filter_include_undated_vt",
     )
 
-# Base year filter first, while optionally retaining undated VT KII/FGD
-year_mask = master["year"].eq(selected_year)
+
+# ============================================================
+# YEAR FILTER
+# ============================================================
+
+year_mask = (
+    master["year"]
+    .eq(selected_year)
+)
+
+
+# Undated KII / FGD have no year,
+# but can optionally remain in VT aggregate totals.
+
 if include_undated_vt:
+
     year_mask |= (
         master["date"].isna()
         & master["project"].eq("VT")
-        & master["subsource"].eq("VT KII/FGD")
+        & master["subsource"].eq(
+            "VT KII/FGD"
+        )
     )
-year_df = master.loc[year_mask].copy()
 
-project_df = year_df.copy()
+
+year_df = (
+    master.loc[year_mask]
+    .copy()
+)
+
+
+# ============================================================
+# PROJECT FILTER
+# ============================================================
+
+project_df = (
+    year_df.copy()
+)
+
+
 if selected_project != "All Projects":
-    project_df = project_df[project_df["project"].eq(selected_project)].copy()
+
+    project_df = (
+        project_df[
+            project_df["project"]
+            .eq(selected_project)
+        ]
+        .copy()
+    )
+
+
+# ============================================================
+# SIDEBAR ADVANCED FILTERS
+# ============================================================
 
 with st.sidebar:
-    province_values = sorted(
-        x for x in project_df["province"].fillna("").astype(str).unique()
-        if x.strip() and x != "Unknown"
-    )
-    selected_provinces = st.multiselect("Province", province_values, default=[])
 
-    status_values = ["Approved", "Rejected", "Pending", "Unreviewed"]
-    selected_statuses = st.multiselect(
-        "QA status",
-        status_values,
-        default=status_values,
+    province_values = sorted(
+        x
+        for x
+        in project_df[
+            "province"
+        ]
+        .fillna("")
+        .astype(str)
+        .unique()
+        if (
+            x.strip()
+            and x != "Unknown"
+        )
     )
+
+
+    selected_provinces = (
+        st.multiselect(
+            "Province",
+            province_values,
+            default=[],
+            key="filter_province",
+        )
+    )
+
+
+    status_values = [
+        "Approved",
+        "Rejected",
+        "Pending",
+        "Unreviewed",
+    ]
+
+
+    selected_statuses = (
+        st.multiselect(
+            "QA status",
+            status_values,
+            default=status_values,
+            key="filter_qa_status",
+        )
+    )
+
 
     tool_values = sorted(
-        x for x in project_df["tool_type"].fillna("").astype(str).unique()
-        if x.strip() and x != "Unknown"
+        x
+        for x
+        in project_df[
+            "tool_type"
+        ]
+        .fillna("")
+        .astype(str)
+        .unique()
+        if (
+            x.strip()
+            and x != "Unknown"
+        )
     )
-    selected_tools = st.multiselect("Tool / instrument", tool_values, default=[])
 
-    search_text = st.text_input(
-        "Search aggregate fields",
-        placeholder="Province, district, tool, rejection reason...",
+
+    selected_tools = (
+        st.multiselect(
+            "Tool / instrument",
+            tool_values,
+            default=[],
+            key="filter_tool_instrument",
+        )
     )
+
+
+    search_text = (
+        st.text_input(
+            "Search operational fields",
+            placeholder=(
+                "Province, district, "
+                "tool, rejection reason..."
+            ),
+            key="filter_search_text",
+        )
+    )
+
+
+# ============================================================
+# APPLY ALL FILTERS
+# ============================================================
 
 filtered = apply_filters(
     project_df,
@@ -210,30 +473,88 @@ filtered = apply_filters(
     search_text=search_text,
 )
 
-# -----------------------------
-# Context strip
-# -----------------------------
-latest_dated = year_df["date"].dropna().max()
-latest_date_text = latest_dated.strftime("%d %b %Y") if pd.notna(latest_dated) else "No dated records"
-refresh_text = datetime.now(ZoneInfo("Asia/Kabul")).strftime("%d %b %Y • %H:%M")
+
+# ============================================================
+# CONTEXT INFORMATION
+# ============================================================
+
+latest_dated = (
+    year_df["date"]
+    .dropna()
+    .max()
+)
+
+
+if pd.notna(latest_dated):
+
+    latest_date_text = (
+        latest_dated.strftime(
+            "%d %b %Y"
+        )
+    )
+
+else:
+
+    latest_date_text = (
+        "No dated records"
+    )
+
+
+refresh_text = (
+    datetime.now(
+        ZoneInfo(
+            "Asia/Kabul"
+        )
+    )
+    .strftime(
+        "%d %b %Y • %H:%M"
+    )
+)
+
 
 st.markdown(
     f"""
     <div class="context-strip">
-      <span>{pill(f"Year {selected_year}")}</span>
-      <span>{pill(selected_project)}</span>
-      <span>{pill(f"Latest data: {latest_date_text}")}</span>
-      <span>{pill(f"Rows in current view: {len(filtered):,}")}</span>
-      <span>{pill(f"Refreshed: {refresh_text}")}</span>
+
+        <span>
+            {pill(f"Year {selected_year}")}
+        </span>
+
+        <span>
+            {pill(selected_project)}
+        </span>
+
+        <span>
+            {pill(f"Latest data: {latest_date_text}")}
+        </span>
+
+        <span>
+            {pill(f"Rows in current view: {len(filtered):,}")}
+        </span>
+
+        <span>
+            {pill(f"Refreshed: {refresh_text}")}
+        </span>
+
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-# -----------------------------
-# Main navigation
-# -----------------------------
-tab_overview, tab_portfolio, tab_project, tab_quality, tab_geo, tab_time, tab_explorer = st.tabs(
+
+# ============================================================
+# MAIN NAVIGATION
+# ============================================================
+
+(
+    tab_overview,
+    tab_portfolio,
+    tab_project,
+    tab_quality,
+    tab_geo,
+    tab_time,
+    tab_explorer,
+) = st.tabs(
     [
         "Executive Overview",
         "Portfolio Intelligence",
@@ -245,318 +566,1472 @@ tab_overview, tab_portfolio, tab_project, tab_quality, tab_geo, tab_time, tab_ex
     ]
 )
 
-# -----------------------------
-# Executive Overview
-# -----------------------------
+
+# ============================================================
+# TAB 1
+# EXECUTIVE OVERVIEW
+# ============================================================
+
 with tab_overview:
-    summary = portfolio_summary(year_df, SCOPES, projects=(PROJECTS if selected_project == "All Projects" else [selected_project]))
 
-    total_scope = int(summary["Scope"].sum())
-    total_received = int(summary["Received"].sum())
-    total_approved = int(summary["Approved"].sum())
-    total_rejected = int(summary["Rejected"].sum())
-    total_pending = int(summary["Pending / Unreviewed"].sum())
-    total_remaining = int(summary["Remaining"].sum())
-    progress = total_approved / total_scope if total_scope else 0
-    approval_rate = total_approved / total_received if total_received else 0
-    reviewed_rate = (total_approved + total_rejected) / total_received if total_received else 0
-
-    section_header("Executive Snapshot", "Live portfolio metrics computed from project tabs")
-
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-    with c1:
-        metric_card("Scope", f"{total_scope:,}", "Configured 2026 target", "neutral")
-    with c2:
-        metric_card("Received", f"{total_received:,}", f"{total_received / total_scope:.1%} of scope" if total_scope else "—", "blue")
-    with c3:
-        metric_card("Approved", f"{total_approved:,}", f"{approval_rate:.1%} approval rate", "green")
-    with c4:
-        metric_card("Rejected", f"{total_rejected:,}", f"{total_rejected / total_received:.1%} of received" if total_received else "—", "red")
-    with c5:
-        metric_card("Pending QA", f"{total_pending:,}", f"{total_pending / total_received:.1%} backlog" if total_received else "—", "amber")
-    with c6:
-        metric_card("Completion", f"{progress:.1%}", f"{total_remaining:,} remaining", "purple")
-
-    c1, c2, c3 = st.columns([1.15, 1.0, 0.85])
-    with c1:
-        st.plotly_chart(fig_scope_completion(summary), use_container_width=True, config={"displayModeBar": False})
-    with c2:
-        st.plotly_chart(fig_status_mix(total_approved, total_rejected, total_pending), use_container_width=True, config={"displayModeBar": False})
-    with c3:
-        st.plotly_chart(fig_speedometer(progress, title="Portfolio Completion"), use_container_width=True, config={"displayModeBar": False})
-
-    c1, c2 = st.columns([1.25, 1])
-    with c1:
-        st.plotly_chart(fig_project_radar(summary), use_container_width=True, config={"displayModeBar": False})
-    with c2:
-        dq = data_quality_summary(year_df, selected_year)
-        panel_title("Data Quality Signals", "Checks that can materially affect interpretation")
-        d1, d2 = st.columns(2)
-        with d1:
-            metric_card("QC Reviewed", f"{reviewed_rate:.1%}", "Approved + Rejected / Received", "cyan")
-            metric_card("Future-dated", f"{dq['future_dated']:,}", "Dates later than today", "red" if dq["future_dated"] else "green")
-        with d2:
-            metric_card("Undated VT KII/FGD", f"{dq['undated_vt_kii_fgd']:,}", "Excluded from time charts", "amber")
-            metric_card("Missing rejection reason", f"{dq['rejected_missing_reason']:,}", "Rejected records without documented reason", "red" if dq["rejected_missing_reason"] else "green")
-
-    section_header("Management Intelligence", "Automatic rule-based interpretation of the live data")
-    insights = executive_insights(summary, year_df, selected_year)
-    cols = st.columns(min(3, max(1, len(insights))))
-    for idx, item in enumerate(insights):
-        with cols[idx % len(cols)]:
-            insight_card(item["title"], item["text"], item["level"])
-
-    section_header("Portfolio Health Matrix", "Completion, approval, rejection, QC review and backlog by project")
-    st.plotly_chart(fig_project_health_matrix(summary), use_container_width=True, config={"displayModeBar": False})
-
-    section_header("Project Performance Table", "A decision-ready view of scope, quality and backlog")
-    display_summary = summary.copy()
-    percent_cols = [
-        "Completion %",
-        "Collection Coverage %",
-        "Approval Rate %",
-        "Rejection Rate %",
-        "QC Reviewed %",
-        "Backlog %",
-    ]
-    st.dataframe(
-        display_summary.style.format({
-            "Scope": "{:,.0f}",
-            "Received": "{:,.0f}",
-            "Approved": "{:,.0f}",
-            "Rejected": "{:,.0f}",
-            "Pending / Unreviewed": "{:,.0f}",
-            "Remaining": "{:,.0f}",
-            **{c: "{:.1%}" for c in percent_cols},
-        }),
-        use_container_width=True,
-        hide_index=True,
-        height=310,
+    executive_projects = (
+        PROJECTS
+        if selected_project
+        == "All Projects"
+        else [selected_project]
     )
 
-# -----------------------------
-# Portfolio Intelligence
-# -----------------------------
-with tab_portfolio:
-    section_header("Portfolio Intelligence", "Advanced comparative analytics across all projects")
-    all_summary = portfolio_summary(year_df, SCOPES, projects=PROJECTS)
 
-    c1, c2 = st.columns([1.15, 1])
-    with c1:
-        st.plotly_chart(fig_treemap(all_summary), use_container_width=True, config={"displayModeBar": False})
-    with c2:
-        st.plotly_chart(fig_waterfall(all_summary), use_container_width=True, config={"displayModeBar": False})
-
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        st.plotly_chart(fig_funnel(all_summary), use_container_width=True, config={"displayModeBar": False})
-    with c2:
-        st.plotly_chart(fig_project_health_matrix(all_summary), use_container_width=True, config={"displayModeBar": False})
-
-    section_header("Project Comparison Table", "Scope, delivery, quality, QA review and backlog")
-    st.dataframe(
-        all_summary.style.format({
-            "Scope": "{:,.0f}", "Received": "{:,.0f}", "Approved": "{:,.0f}", "Rejected": "{:,.0f}",
-            "Pending / Unreviewed": "{:,.0f}", "Remaining": "{:,.0f}",
-            "Completion %": "{:.1%}", "Collection Coverage %": "{:.1%}", "Approval Rate %": "{:.1%}",
-            "Rejection Rate %": "{:.1%}", "QC Reviewed %": "{:.1%}", "Backlog %": "{:.1%}",
-        }), use_container_width=True, hide_index=True, height=320
+    summary = (
+        portfolio_summary(
+            year_df,
+            SCOPES,
+            projects=executive_projects,
+        )
     )
 
-# -----------------------------
-# Project Deep Dive
-# -----------------------------
-with tab_project:
-    active_project = selected_project
-    if active_project == "All Projects":
-        active_project = st.selectbox("Choose a project for the deep dive", PROJECTS, key="deep_dive_project")
 
-    deep_df = year_df[year_df["project"].eq(active_project)].copy()
-    psummary = project_summary(deep_df, active_project, SCOPES.get(active_project, 0))
+    # --------------------------------------------------------
+    # PORTFOLIO TOTALS
+    # --------------------------------------------------------
+
+    total_scope = int(
+        summary["Scope"].sum()
+    )
+
+    total_received = int(
+        summary["Received"].sum()
+    )
+
+    total_approved = int(
+        summary["Approved"].sum()
+    )
+
+    total_rejected = int(
+        summary["Rejected"].sum()
+    )
+
+    total_pending = int(
+        summary[
+            "Pending / Unreviewed"
+        ].sum()
+    )
+
+    total_remaining = int(
+        summary["Remaining"].sum()
+    )
+
+
+    progress = (
+        total_approved
+        / total_scope
+        if total_scope
+        else 0
+    )
+
+
+    coverage = (
+        total_received
+        / total_scope
+        if total_scope
+        else 0
+    )
+
+
+    approval_rate = (
+        total_approved
+        / total_received
+        if total_received
+        else 0
+    )
+
+
+    rejection_rate = (
+        total_rejected
+        / total_received
+        if total_received
+        else 0
+    )
+
+
+    reviewed_rate = (
+        (
+            total_approved
+            + total_rejected
+        )
+        / total_received
+        if total_received
+        else 0
+    )
+
+
+    backlog_rate = (
+        total_pending
+        / total_received
+        if total_received
+        else 0
+    )
+
+
+    # --------------------------------------------------------
+    # KPI SECTION
+    # --------------------------------------------------------
 
     section_header(
-        f"{active_project} Deep Dive",
-        "A dedicated project dashboard with context-specific visualizations",
+        "Executive Snapshot",
+        (
+            "A compact management view of "
+            "delivery, quality and scope performance"
+        ),
     )
 
-    k1, k2, k3, k4, k5, k6 = st.columns(6)
+
+    (
+        k1,
+        k2,
+        k3,
+        k4,
+        k5,
+        k6,
+    ) = st.columns(6)
+
+
     with k1:
-        metric_card("Received", f"{psummary['Received']:,}", f"{psummary['Collection Coverage %']:.1%} of scope", "blue")
+
+        metric_card(
+            "Scope",
+            f"{total_scope:,}",
+            "Configured target",
+            "neutral",
+        )
+
+
     with k2:
-        metric_card("Approved", f"{psummary['Approved']:,}", f"{psummary['Approval Rate %']:.1%} approval", "green")
+
+        metric_card(
+            "Received",
+            f"{total_received:,}",
+            (
+                f"{coverage:.1%} "
+                "collection coverage"
+            ),
+            "blue",
+        )
+
+
     with k3:
-        metric_card("Rejected", f"{psummary['Rejected']:,}", f"{psummary['Rejection Rate %']:.1%} rejected", "red")
+
+        metric_card(
+            "Approved",
+            f"{total_approved:,}",
+            (
+                f"{approval_rate:.1%} "
+                "approval rate"
+            ),
+            "green",
+        )
+
+
     with k4:
-        metric_card("Pending", f"{psummary['Pending / Unreviewed']:,}", f"{psummary['Backlog %']:.1%} backlog", "amber")
+
+        metric_card(
+            "Rejected",
+            f"{total_rejected:,}",
+            (
+                f"{rejection_rate:.1%} "
+                "rejection rate"
+            ),
+            "red",
+        )
+
+
     with k5:
-        metric_card("Remaining", f"{psummary['Remaining']:,}", f"{psummary['Completion %']:.1%} complete", "purple")
+
+        metric_card(
+            "Pending QA",
+            f"{total_pending:,}",
+            (
+                f"{backlog_rate:.1%} "
+                "backlog"
+            ),
+            "amber",
+        )
+
+
     with k6:
-        metric_card("Health", psummary["Health Flag"], psummary["Priority Action"], "cyan")
+
+        metric_card(
+            "Completion",
+            f"{progress:.1%}",
+            (
+                f"{total_remaining:,} "
+                "remaining"
+            ),
+            "purple",
+        )
+
+
+    # --------------------------------------------------------
+    # EXECUTIVE CHARTS
+    # --------------------------------------------------------
+
+    c1, c2, c3 = st.columns(
+        [1.2, 1.0, 0.9]
+    )
+
+
+    with c1:
+
+        render_chart(
+            fig_scope_completion(
+                summary
+            ),
+            key=(
+                "overview_"
+                "scope_completion"
+            ),
+        )
+
+
+    with c2:
+
+        render_chart(
+            fig_status_mix(
+                total_approved,
+                total_rejected,
+                total_pending,
+            ),
+            key=(
+                "overview_"
+                "status_mix"
+            ),
+        )
+
+
+    with c3:
+
+        render_chart(
+            fig_speedometer(
+                progress,
+                title=(
+                    "Portfolio Completion"
+                ),
+            ),
+            key=(
+                "overview_"
+                "completion_gauge"
+            ),
+        )
+
+
+    # --------------------------------------------------------
+    # RADAR + QUALITY SIGNALS
+    # --------------------------------------------------------
+
+    c1, c2 = st.columns(
+        [1.2, 1]
+    )
+
+
+    with c1:
+
+        render_chart(
+            fig_project_radar(
+                summary
+            ),
+            key=(
+                "overview_"
+                "project_radar"
+            ),
+        )
+
+
+    with c2:
+
+        dq = (
+            data_quality_summary(
+                year_df,
+                selected_year,
+            )
+        )
+
+
+        panel_title(
+            "Data Quality Signals",
+            (
+                "Checks that can materially "
+                "affect interpretation"
+            ),
+        )
+
+
+        d1, d2 = (
+            st.columns(2)
+        )
+
+
+        with d1:
+
+            metric_card(
+                "QC Reviewed",
+                f"{reviewed_rate:.1%}",
+                (
+                    "Approved + Rejected "
+                    "/ Received"
+                ),
+                "cyan",
+            )
+
+
+            metric_card(
+                "Future-dated",
+                f"{dq['future_dated']:,}",
+                "Dates later than today",
+                (
+                    "red"
+                    if dq[
+                        "future_dated"
+                    ]
+                    else "green"
+                ),
+            )
+
+
+        with d2:
+
+            metric_card(
+                "Undated VT KII/FGD",
+                (
+                    f"{dq['undated_vt_kii_fgd']:,}"
+                ),
+                (
+                    "Excluded from "
+                    "time charts"
+                ),
+                "amber",
+            )
+
+
+            metric_card(
+                "Missing rejection reason",
+                (
+                    f"{dq['rejected_missing_reason']:,}"
+                ),
+                (
+                    "Rejected records "
+                    "without documented reason"
+                ),
+                (
+                    "red"
+                    if dq[
+                        "rejected_missing_reason"
+                    ]
+                    else "green"
+                ),
+            )
+
+
+    # --------------------------------------------------------
+    # MANAGEMENT INTELLIGENCE
+    # --------------------------------------------------------
+
+    section_header(
+        "Management Intelligence",
+        (
+            "Automatic interpretation generated "
+            "from the current live portfolio"
+        ),
+    )
+
+
+    insights = executive_insights(
+        summary,
+        year_df,
+        selected_year,
+    )
+
+
+    insight_columns = (
+        st.columns(
+            min(
+                3,
+                max(
+                    1,
+                    len(insights),
+                ),
+            )
+        )
+    )
+
+
+    for index, item in enumerate(
+        insights
+    ):
+
+        with insight_columns[
+            index
+            % len(
+                insight_columns
+            )
+        ]:
+
+            insight_card(
+                item["title"],
+                item["text"],
+                item["level"],
+            )
+
+
+    # --------------------------------------------------------
+    # HEALTH MATRIX
+    # --------------------------------------------------------
+
+    section_header(
+        "Portfolio Health Matrix",
+        (
+            "Completion, QA review, rejection "
+            "and backlog in one management surface"
+        ),
+    )
+
+
+    render_chart(
+        fig_project_health_matrix(
+            summary
+        ),
+        key=(
+            "overview_"
+            "project_health_matrix"
+        ),
+    )
+
+
+# ============================================================
+# TAB 2
+# PORTFOLIO INTELLIGENCE
+# ============================================================
+
+with tab_portfolio:
+
+    section_header(
+        "Portfolio Intelligence",
+        (
+            "Advanced comparative analytics "
+            "across all projects"
+        ),
+    )
+
+
+    all_summary = (
+        portfolio_summary(
+            year_df,
+            SCOPES,
+            projects=PROJECTS,
+        )
+    )
+
+
+    # --------------------------------------------------------
+    # TREEMAP + WATERFALL
+    # --------------------------------------------------------
+
+    c1, c2 = st.columns(
+        [1.15, 1]
+    )
+
+
+    with c1:
+
+        render_chart(
+            fig_treemap(
+                all_summary
+            ),
+            key=(
+                "portfolio_"
+                "scope_treemap"
+            ),
+        )
+
+
+    with c2:
+
+        render_chart(
+            fig_waterfall(
+                all_summary
+            ),
+            key=(
+                "portfolio_"
+                "remaining_waterfall"
+            ),
+        )
+
+
+    # --------------------------------------------------------
+    # FUNNEL + HEALTH MATRIX
+    # --------------------------------------------------------
+
+    c1, c2 = st.columns(2)
+
+
+    with c1:
+
+        render_chart(
+            fig_funnel(
+                all_summary
+            ),
+            key=(
+                "portfolio_"
+                "delivery_funnel"
+            ),
+        )
+
+
+    with c2:
+
+        render_chart(
+            fig_project_health_matrix(
+                all_summary
+            ),
+            key=(
+                "portfolio_"
+                "health_matrix"
+            ),
+        )
+
+
+    # --------------------------------------------------------
+    # PORTFOLIO TABLE
+    # --------------------------------------------------------
+
+    section_header(
+        "Project Performance Table",
+        (
+            "Decision-ready comparison of scope, "
+            "collection, approval, rejection and backlog"
+        ),
+    )
+
+
+    st.dataframe(
+        all_summary.style.format(
+            {
+                "Scope": "{:,.0f}",
+                "Received": "{:,.0f}",
+                "Approved": "{:,.0f}",
+                "Rejected": "{:,.0f}",
+                (
+                    "Pending / "
+                    "Unreviewed"
+                ): "{:,.0f}",
+                "Remaining": "{:,.0f}",
+                "Completion %": "{:.1%}",
+                (
+                    "Collection "
+                    "Coverage %"
+                ): "{:.1%}",
+                (
+                    "Approval "
+                    "Rate %"
+                ): "{:.1%}",
+                (
+                    "Rejection "
+                    "Rate %"
+                ): "{:.1%}",
+                (
+                    "QC Reviewed %"
+                ): "{:.1%}",
+                "Backlog %": "{:.1%}",
+            }
+        ),
+        use_container_width=True,
+        hide_index=True,
+        height=330,
+    )
+
+
+# ============================================================
+# TAB 3
+# PROJECT DEEP DIVE
+# ============================================================
+
+with tab_project:
+
+    active_project = (
+        selected_project
+    )
+
+
+    if active_project == "All Projects":
+
+        active_project = (
+            st.selectbox(
+                "Choose a project for the deep dive",
+                PROJECTS,
+                key=(
+                    "deep_dive_"
+                    "project_selector"
+                ),
+            )
+        )
+
+
+    deep_df = (
+        year_df[
+            year_df[
+                "project"
+            ].eq(
+                active_project
+            )
+        ]
+        .copy()
+    )
+
+
+    psummary = (
+        project_summary(
+            deep_df,
+            active_project,
+            SCOPES.get(
+                active_project,
+                0,
+            ),
+        )
+    )
+
+
+    section_header(
+        (
+            f"{active_project} "
+            "Deep Dive"
+        ),
+        (
+            "A complete project-level "
+            "command dashboard"
+        ),
+    )
+
+
+    # --------------------------------------------------------
+    # PROJECT KPIs
+    # --------------------------------------------------------
+
+    (
+        k1,
+        k2,
+        k3,
+        k4,
+        k5,
+        k6,
+    ) = st.columns(6)
+
+
+    with k1:
+
+        metric_card(
+            "Received",
+            f"{psummary['Received']:,}",
+            (
+                f"{psummary['Collection Coverage %']:.1%} "
+                "of scope"
+            ),
+            "blue",
+        )
+
+
+    with k2:
+
+        metric_card(
+            "Approved",
+            f"{psummary['Approved']:,}",
+            (
+                f"{psummary['Approval Rate %']:.1%} "
+                "approval"
+            ),
+            "green",
+        )
+
+
+    with k3:
+
+        metric_card(
+            "Rejected",
+            f"{psummary['Rejected']:,}",
+            (
+                f"{psummary['Rejection Rate %']:.1%} "
+                "rejected"
+            ),
+            "red",
+        )
+
+
+    with k4:
+
+        metric_card(
+            "Pending",
+            (
+                f"{psummary['Pending / Unreviewed']:,}"
+            ),
+            (
+                f"{psummary['Backlog %']:.1%} "
+                "backlog"
+            ),
+            "amber",
+        )
+
+
+    with k5:
+
+        metric_card(
+            "Remaining",
+            (
+                f"{psummary['Remaining']:,}"
+            ),
+            (
+                f"{psummary['Completion %']:.1%} "
+                "complete"
+            ),
+            "purple",
+        )
+
+
+    with k6:
+
+        metric_card(
+            "Health",
+            psummary[
+                "Health Flag"
+            ],
+            psummary[
+                "Priority Action"
+            ],
+            "cyan",
+        )
+
+
+    # --------------------------------------------------------
+    # EMPTY PROJECT
+    # --------------------------------------------------------
 
     if deep_df.empty:
-        show_empty_state("No records in this project for the selected year.", "Change the year or project filter.")
+
+        show_empty_state(
+            (
+                "No records in this "
+                "project for the "
+                "selected year."
+            ),
+            (
+                "Change the year "
+                "or project filter."
+            ),
+        )
+
+
     else:
-        monthly = monthly_summary(deep_df, selected_year)
 
-        r0c1, r0c2 = st.columns([1.35, 1])
-        with r0c1:
-            st.plotly_chart(fig_monthly_trend(monthly, title=f"{active_project} Monthly Trend"), use_container_width=True, config={"displayModeBar": False})
-        with r0c2:
-            st.plotly_chart(fig_speedometer(psummary["Completion %"], title=f"{active_project} Completion"), use_container_width=True, config={"displayModeBar": False})
+        # ----------------------------------------------------
+        # MONTHLY TREND + COMPLETION
+        # ----------------------------------------------------
 
-        r1c1, r1c2 = st.columns([1.35, 1])
-        with r1c1:
-            qc_view = qc_reviewer_summary(deep_df)
-            st.plotly_chart(fig_qc_reviewer(qc_view), use_container_width=True, config={"displayModeBar": False})
-        with r1c2:
-            project_breakdowns = project_specific_breakdowns(deep_df, active_project)
-            if active_project == "Moraa" and project_breakdowns.get("sunburst") is not None:
-                st.plotly_chart(
-                    fig_sunburst(project_breakdowns["sunburst"], "Phase", "Discipline", "Status"),
-                    use_container_width=True,
-                    config={"displayModeBar": False},
+        monthly = (
+            monthly_summary(
+                deep_df,
+                selected_year,
+            )
+        )
+
+
+        c1, c2 = st.columns(
+            [1.35, 1]
+        )
+
+
+        with c1:
+
+            render_chart(
+                fig_monthly_trend(
+                    monthly,
+                    title=(
+                        f"{active_project} "
+                        "Monthly Trend"
+                    ),
+                ),
+                key=(
+                    "project_"
+                    f"{active_project}_"
+                    "monthly_trend"
+                ),
+            )
+
+
+        with c2:
+
+            render_chart(
+                fig_speedometer(
+                    psummary[
+                        "Completion %"
+                    ],
+                    title=(
+                        f"{active_project} "
+                        "Completion"
+                    ),
+                ),
+                key=(
+                    "project_"
+                    f"{active_project}_"
+                    "completion_gauge"
+                ),
+            )
+
+
+        # ----------------------------------------------------
+        # PROVINCE + REJECTION
+        # ----------------------------------------------------
+
+        c1, c2 = st.columns(2)
+
+
+        with c1:
+
+            provinces = (
+                province_summary(
+                    deep_df
                 )
-            elif active_project == "VT":
-                vt_tools = vt_tool_summary(deep_df)
-                st.plotly_chart(fig_vt_tool_bubble(vt_tools), use_container_width=True, config={"displayModeBar": False})
-            else:
-                q = quality_summary(deep_df)
-                st.plotly_chart(fig_quality_components(q, title="QA Component Profile"), use_container_width=True, config={"displayModeBar": False})
+                .head(18)
+            )
 
-        r2c1, r2c2 = st.columns([1, 1])
-        with r2c1:
-            provinces = province_summary(deep_df).head(15)
-            st.plotly_chart(fig_province_status(provinces, title=f"{active_project} by Province"), use_container_width=True, config={"displayModeBar": False})
-        with r2c2:
-            reasons = rejection_summary(deep_df, top_n=12)
-            st.plotly_chart(fig_rejection_pareto(reasons, title=f"{active_project} Rejection Pareto"), use_container_width=True, config={"displayModeBar": False})
 
-        section_header("Project-Specific Intelligence", "Visuals change based on the data structure of the selected project")
-        project_breakdowns = project_specific_breakdowns(deep_df, active_project)
+            render_chart(
+                fig_province_status(
+                    provinces,
+                    title=(
+                        f"{active_project} "
+                        "by Province"
+                    ),
+                ),
+                key=(
+                    "project_"
+                    f"{active_project}_"
+                    "province_status"
+                ),
+            )
+
+
+        with c2:
+
+            reasons = (
+                rejection_summary(
+                    deep_df,
+                    top_n=12,
+                )
+            )
+
+
+            render_chart(
+                fig_rejection_pareto(
+                    reasons,
+                    title=(
+                        f"{active_project} "
+                        "Rejection Pareto"
+                    ),
+                ),
+                key=(
+                    "project_"
+                    f"{active_project}_"
+                    "rejection_pareto"
+                ),
+            )
+
+
+        # ----------------------------------------------------
+        # PROJECT-SPECIFIC DATA
+        # ----------------------------------------------------
+
+        project_breakdowns = (
+            project_specific_breakdowns(
+                deep_df,
+                active_project,
+            )
+        )
+
+
+        section_header(
+            "Project-Specific Intelligence",
+            (
+                "Visualizations adapt to "
+                "the structure of each project"
+            ),
+        )
+
+
+        # ====================================================
+        # VT
+        # ====================================================
 
         if active_project == "VT":
-            vt_summary = vt_tool_summary(deep_df)
+
+            vt_summary = (
+                vt_tool_summary(
+                    deep_df
+                )
+            )
+
+
+            c1, c2 = st.columns(
+                [1.1, 1]
+            )
+
+
+            with c1:
+
+                render_chart(
+                    fig_vt_tool_bubble(
+                        vt_summary
+                    ),
+                    key=(
+                        "project_vt_"
+                        "tool_risk_map"
+                    ),
+                )
+
+
+            with c2:
+
+                render_chart(
+                    fig_category_bar(
+                        project_breakdowns.get(
+                            "tool"
+                        ),
+                        "Tool",
+                        "Records",
+                        (
+                            "VT Tool "
+                            "Distribution"
+                        ),
+                    ),
+                    key=(
+                        "project_vt_"
+                        "tool_distribution"
+                    ),
+                )
+
+
             st.dataframe(
-                vt_summary.style.format({
-                    "Approval Rate %": "{:.1%}",
-                    "Rejection Rate %": "{:.1%}",
-                    "QC Reviewed %": "{:.1%}",
-                    "Backlog %": "{:.1%}",
-                }),
+                vt_summary.style.format(
+                    {
+                        (
+                            "Approval "
+                            "Rate %"
+                        ): "{:.1%}",
+                        (
+                            "Rejection "
+                            "Rate %"
+                        ): "{:.1%}",
+                        (
+                            "QC "
+                            "Reviewed %"
+                        ): "{:.1%}",
+                        "Backlog %": "{:.1%}",
+                    }
+                ),
                 use_container_width=True,
                 hide_index=True,
             )
 
+
+        # ====================================================
+        # MORAA
+        # ====================================================
+
         elif active_project == "Moraa":
-            a, b, c = st.columns(3)
-            with a:
-                st.plotly_chart(fig_category_bar(project_breakdowns.get("phase"), "Phase", "Records", "Phase"), use_container_width=True, config={"displayModeBar": False})
-            with b:
-                st.plotly_chart(fig_category_bar(project_breakdowns.get("discipline"), "Discipline", "Records", "Discipline"), use_container_width=True, config={"displayModeBar": False})
-            with c:
-                st.plotly_chart(fig_category_bar(project_breakdowns.get("gender"), "Gender", "Records", "Gender"), use_container_width=True, config={"displayModeBar": False})
+
+            c1, c2 = st.columns(
+                [1.15, 1]
+            )
+
+
+            with c1:
+
+                render_chart(
+                    fig_sunburst(
+                        project_breakdowns.get(
+                            "sunburst"
+                        ),
+                        "Phase",
+                        "Discipline",
+                        "Status",
+                    ),
+                    key=(
+                        "project_moraa_"
+                        "sunburst"
+                    ),
+                )
+
+
+            with c2:
+
+                render_chart(
+                    fig_category_bar(
+                        project_breakdowns.get(
+                            "discipline"
+                        ),
+                        "Discipline",
+                        "Records",
+                        (
+                            "Discipline "
+                            "Distribution"
+                        ),
+                    ),
+                    key=(
+                        "project_moraa_"
+                        "discipline"
+                    ),
+                )
+
+
+            c1, c2 = st.columns(2)
+
+
+            with c1:
+
+                render_chart(
+                    fig_category_bar(
+                        project_breakdowns.get(
+                            "phase"
+                        ),
+                        "Phase",
+                        "Records",
+                        (
+                            "Phase "
+                            "Distribution"
+                        ),
+                    ),
+                    key=(
+                        "project_moraa_"
+                        "phase"
+                    ),
+                )
+
+
+            with c2:
+
+                render_chart(
+                    fig_category_bar(
+                        project_breakdowns.get(
+                            "gender"
+                        ),
+                        "Gender",
+                        "Records",
+                        (
+                            "Gender "
+                            "Distribution"
+                        ),
+                    ),
+                    key=(
+                        "project_moraa_"
+                        "gender"
+                    ),
+                )
+
+
+        # ====================================================
+        # CBE / PUBLIC / ECE / TLS
+        # ====================================================
 
         else:
-            a, b = st.columns(2)
-            with a:
-                st.plotly_chart(
-                    fig_category_bar(project_breakdowns.get("tool"), "Tool", "Records", "Tool / Instrument"),
-                    use_container_width=True,
-                    config={"displayModeBar": False},
-                )
-            with b:
-                st.plotly_chart(
-                    fig_category_bar(project_breakdowns.get("qc_reviewer"), "QC Reviewer", "Records", "QA Reviewer"),
-                    use_container_width=True,
-                    config={"displayModeBar": False},
+
+            c1, c2 = (
+                st.columns(2)
+            )
+
+
+            with c1:
+
+                render_chart(
+                    fig_category_bar(
+                        project_breakdowns.get(
+                            "tool"
+                        ),
+                        "Tool",
+                        "Records",
+                        (
+                            "Tool / "
+                            "Instrument Mix"
+                        ),
+                    ),
+                    key=(
+                        "project_"
+                        f"{active_project}_"
+                        "tool_mix"
+                    ),
                 )
 
-# -----------------------------
-# Quality Intelligence
-# -----------------------------
+
+            with c2:
+
+                q = quality_summary(
+                    deep_df
+                )
+
+
+                render_chart(
+                    fig_quality_components(
+                        q,
+                        title=(
+                            "QA Component "
+                            "Profile"
+                        ),
+                    ),
+                    key=(
+                        "project_"
+                        f"{active_project}_"
+                        "quality_profile"
+                    ),
+                )
+
+
+            qc = (
+                qc_reviewer_summary(
+                    deep_df
+                )
+            )
+
+
+            render_chart(
+                fig_qc_reviewer(
+                    qc
+                ),
+                key=(
+                    "project_"
+                    f"{active_project}_"
+                    "qc_reviewer"
+                ),
+            )
+
+
+# ============================================================
+# TAB 4
+# QUALITY & RISK
+# ============================================================
+
 with tab_quality:
-    qdf = filtered.copy()
-    section_header("Quality Intelligence", "Rejections, QA backlog, field-staff performance and data-quality signals")
 
-    left, right = st.columns([1.25, 1])
-    with left:
-        reasons = rejection_summary(qdf, top_n=15)
-        st.plotly_chart(fig_rejection_pareto(reasons, title="Rejection Pareto | Current Filter"), use_container_width=True, config={"displayModeBar": False})
-    with right:
-        staff = staff_summary(qdf, top_n=30)
-        st.plotly_chart(fig_staff_scatter(staff), use_container_width=True, config={"displayModeBar": False})
-
-    section_header("Quality Metrics by Project", "QA outcome rates calculated from the selected live records")
-    quality_table = portfolio_summary(
-        qdf,
-        SCOPES,
-        projects=(PROJECTS if selected_project == "All Projects" else [selected_project]),
-        honor_input_as_filtered=True,
-    )
-    st.dataframe(
-        quality_table.style.format({
-            "Completion %": "{:.1%}",
-            "Collection Coverage %": "{:.1%}",
-            "Approval Rate %": "{:.1%}",
-            "Rejection Rate %": "{:.1%}",
-            "QC Reviewed %": "{:.1%}",
-            "Backlog %": "{:.1%}",
-        }),
-        use_container_width=True,
-        hide_index=True,
+    qdf = (
+        filtered.copy()
     )
 
-# -----------------------------
-# Geography & Trends
-# -----------------------------
-with tab_geo:
-    section_header("Geography & Trends", "Where the portfolio is active, and how delivery and QA change over time")
 
-    geo_df = filtered.copy()
-    prov = province_summary(geo_df).head(20)
-    monthly = monthly_summary(geo_df[geo_df["date"].notna()], selected_year)
-
-    g1, g2 = st.columns([1.15, 1])
-    with g1:
-        st.plotly_chart(fig_province_status(prov, title="Province Status Mix"), use_container_width=True, config={"displayModeBar": False})
-    with g2:
-        pqi = province_quality_index(geo_df).head(25)
-        st.plotly_chart(fig_province_quality_scatter(pqi), use_container_width=True, config={"displayModeBar": False})
-
-    district = district_summary(geo_df).head(20)
-    st.plotly_chart(fig_category_bar(district, "District", "Records", "Top Districts by Volume"), use_container_width=True, config={"displayModeBar": False})
-
-    section_header("Province Performance Table", "Volume, approval, rejection and pending QA")
-    st.dataframe(
-        prov.style.format({
-            "Approval Rate %": "{:.1%}",
-            "Rejection Rate %": "{:.1%}",
-            "Backlog %": "{:.1%}",
-        }),
-        use_container_width=True,
-        hide_index=True,
-        height=520,
+    section_header(
+        "Quality & Risk Intelligence",
+        (
+            "Where rejections, backlog and "
+            "field-performance risks are concentrated"
+        ),
     )
 
-# -----------------------------
-# Time Intelligence
-# -----------------------------
-with tab_time:
-    section_header("Time Intelligence", "Monthly flow and collection intensity across the reporting year")
-    time_df = filtered[filtered["date"].notna()].copy()
-    monthly_time = monthly_summary(time_df, selected_year)
-    calendar = calendar_heatmap_data(time_df, selected_year)
-    c1, c2 = st.columns([1.2, 1])
+
+    # --------------------------------------------------------
+    # REJECTION + STAFF
+    # --------------------------------------------------------
+
+    c1, c2 = st.columns(
+        [1.2, 1]
+    )
+
+
     with c1:
-        st.plotly_chart(fig_monthly_trend(monthly_time, title="Monthly Collection & QA Trend"), use_container_width=True, config={"displayModeBar": False})
-    with c2:
-        st.plotly_chart(fig_calendar_heatmap(calendar), use_container_width=True, config={"displayModeBar": False})
 
-# -----------------------------
-# Data Explorer
-# -----------------------------
+        reasons = (
+            rejection_summary(
+                qdf,
+                top_n=15,
+            )
+        )
+
+
+        render_chart(
+            fig_rejection_pareto(
+                reasons,
+                title=(
+                    "Rejection Pareto "
+                    "| Current Filter"
+                ),
+            ),
+            key=(
+                "quality_"
+                "rejection_pareto"
+            ),
+        )
+
+
+    with c2:
+
+        staff = (
+            staff_summary(
+                qdf,
+                top_n=35,
+            )
+        )
+
+
+        render_chart(
+            fig_staff_scatter(
+                staff
+            ),
+            key=(
+                "quality_"
+                "staff_performance"
+            ),
+        )
+
+
+    # --------------------------------------------------------
+    # QA COMPONENTS + REVIEWERS
+    # --------------------------------------------------------
+
+    c1, c2 = (
+        st.columns(2)
+    )
+
+
+    with c1:
+
+        q = (
+            quality_summary(
+                qdf
+            )
+        )
+
+
+        render_chart(
+            fig_quality_components(
+                q,
+                title=(
+                    "QA Component "
+                    "Profile"
+                ),
+            ),
+            key=(
+                "quality_"
+                "component_profile"
+            ),
+        )
+
+
+    with c2:
+
+        qc = (
+            qc_reviewer_summary(
+                qdf
+            )
+        )
+
+
+        render_chart(
+            fig_qc_reviewer(
+                qc
+            ),
+            key=(
+                "quality_"
+                "qa_reviewer"
+            ),
+        )
+
+
+# ============================================================
+# TAB 5
+# GEOGRAPHY
+# ============================================================
+
+with tab_geo:
+
+    section_header(
+        "Geographic Intelligence",
+        (
+            "Province and district performance "
+            "with quality-risk context"
+        ),
+    )
+
+
+    geo_df = (
+        filtered.copy()
+    )
+
+
+    prov = (
+        province_summary(
+            geo_df
+        )
+        .head(25)
+    )
+
+
+    pqi = (
+        province_quality_index(
+            geo_df
+        )
+        .head(25)
+    )
+
+
+    c1, c2 = st.columns(
+        [1.15, 1]
+    )
+
+
+    with c1:
+
+        render_chart(
+            fig_province_status(
+                prov,
+                title=(
+                    "Province "
+                    "Status Mix"
+                ),
+            ),
+            key=(
+                "geography_"
+                "province_status"
+            ),
+        )
+
+
+    with c2:
+
+        render_chart(
+            fig_province_quality_scatter(
+                pqi
+            ),
+            key=(
+                "geography_"
+                "province_quality"
+            ),
+        )
+
+
+    # --------------------------------------------------------
+    # DISTRICTS
+    # --------------------------------------------------------
+
+    district = (
+        district_summary(
+            geo_df
+        )
+        .head(25)
+    )
+
+
+    render_chart(
+        fig_category_bar(
+            district,
+            "District",
+            "Records",
+            (
+                "Top Districts "
+                "by Volume"
+            ),
+        ),
+        key=(
+            "geography_"
+            "district_volume"
+        ),
+    )
+
+
+# ============================================================
+# TAB 6
+# TIME INTELLIGENCE
+# ============================================================
+
+with tab_time:
+
+    section_header(
+        "Time Intelligence",
+        (
+            "Monthly flow, daily intensity and "
+            "calendar-based operational patterns"
+        ),
+    )
+
+
+    time_df = (
+        filtered[
+            filtered[
+                "date"
+            ].notna()
+        ]
+        .copy()
+    )
+
+
+    monthly = (
+        monthly_summary(
+            time_df,
+            selected_year,
+        )
+    )
+
+
+    c1, c2 = st.columns(
+        [1.2, 1]
+    )
+
+
+    with c1:
+
+        render_chart(
+            fig_monthly_trend(
+                monthly,
+                title=(
+                    "Monthly Collection "
+                    "& QA Trend"
+                ),
+            ),
+            key=(
+                "time_"
+                "monthly_trend"
+            ),
+        )
+
+
+    with c2:
+
+        cal = (
+            calendar_heatmap_data(
+                time_df,
+                selected_year,
+            )
+        )
+
+
+        render_chart(
+            fig_calendar_heatmap(
+                cal
+            ),
+            key=(
+                "time_"
+                "calendar_heatmap"
+            ),
+        )
+
+
+# ============================================================
+# TAB 7
+# PUBLIC DATA EXPLORER
+# ============================================================
+
 with tab_explorer:
-    section_header("Public Data Explorer", "A privacy-safe record view. Personal names and phone numbers are intentionally excluded.")
+
+    section_header(
+        "Public Data Explorer",
+        (
+            "Privacy-safe operational records. "
+            "Beneficiary names and phone numbers "
+            "are intentionally excluded."
+        ),
+    )
+
 
     safe_cols = [
         "project",
@@ -571,27 +2046,92 @@ with tab_explorer:
         "discipline",
         "gender",
     ]
-    safe_cols = [c for c in safe_cols if c in filtered.columns]
-    public_view = filtered[safe_cols].copy()
 
-    st.caption(f"Records in current filtered view: {len(public_view):,}")
+
+    safe_cols = [
+        column
+        for column
+        in safe_cols
+        if column
+        in filtered.columns
+    ]
+
+
+    public_view = (
+        filtered[
+            safe_cols
+        ]
+        .copy()
+    )
+
+
+    st.caption(
+        (
+            "Records in current "
+            f"filtered view: "
+            f"{len(public_view):,}"
+        )
+    )
+
+
     st.dataframe(
-        public_view.sort_values("date", ascending=False, na_position="last"),
+        public_view.sort_values(
+            "date",
+            ascending=False,
+            na_position="last",
+        ),
         use_container_width=True,
         hide_index=True,
-        height=560,
+        height=590,
     )
 
-    csv = public_view.to_csv(index=False).encode("utf-8-sig")
+
+    # --------------------------------------------------------
+    # CSV EXPORT
+    # --------------------------------------------------------
+
+    csv = (
+        public_view
+        .to_csv(
+            index=False
+        )
+        .encode(
+            "utf-8-sig"
+        )
+    )
+
+
     st.download_button(
-        "Download filtered public CSV",
+        (
+            "Download filtered "
+            "public CSV"
+        ),
         data=csv,
-        file_name=f"UNICEF_public_dashboard_{selected_year}.csv",
+        file_name=(
+            "UNICEF_public_dashboard_"
+            f"{selected_year}.csv"
+        ),
         mime="text/csv",
         use_container_width=True,
+        key=(
+            "explorer_"
+            "download_csv"
+        ),
     )
 
+
+# ============================================================
+# FOOTER
+# ============================================================
+
 footer(
-    source="Google Sheet → internal project tabs only",
-    spreadsheet_id=source_meta["spreadsheet_id"],
+    source=(
+        "Google Sheet → "
+        "internal project tabs only"
+    ),
+    spreadsheet_id=(
+        source_meta[
+            "spreadsheet_id"
+        ]
+    ),
 )
