@@ -78,9 +78,13 @@ from src.ui import (
 
 st.set_page_config(
     page_title="UNICEF Portfolio Intelligence",
-    page_icon="0",
+    page_icon="◈",
     layout="wide",
+
+    # Sidebar initially visible,
+    # but user can open / close it.
     initial_sidebar_state="expanded",
+
     menu_items={
         "Get Help": None,
         "Report a bug": None,
