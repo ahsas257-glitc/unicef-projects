@@ -23,6 +23,10 @@ from src.analytics import (
     data_quality_summary,
     executive_insights,
     project_specific_breakdowns,
+    district_summary,
+    qc_reviewer_summary,
+    province_quality_index,
+    calendar_heatmap_data,
 )
 from src.charts import (
     fig_scope_completion,
@@ -36,9 +40,19 @@ from src.charts import (
     fig_category_bar,
     fig_sunburst,
     fig_quality_components,
+    fig_speedometer,
+    fig_project_radar,
+    fig_treemap,
+    fig_funnel,
+    fig_waterfall,
+    fig_province_quality_scatter,
+    fig_qc_reviewer,
+    fig_calendar_heatmap,
 )
 from src.ui import (
     inject_css,
+    force_dark_mode,
+    panel_title,
     hero,
     metric_card,
     section_header,
@@ -49,12 +63,14 @@ from src.ui import (
 )
 
 st.set_page_config(
-    page_title="UNICEF Portfolio Dashboard",
+    page_title="UNICEF Portfolio Intelligence",
     page_icon="◈",
     layout="wide",
     initial_sidebar_state="expanded",
+    menu_items={"Get Help": None, "Report a bug": None, "About": None},
 )
 
+force_dark_mode()
 inject_css()
 
 # -----------------------------
@@ -63,7 +79,7 @@ inject_css()
 hero(
     title=APP_TITLE,
     subtitle=APP_SUBTITLE,
-    badge="LIVE GOOGLE SHEETS",
+    badge="LIVE • GOOGLE SHEETS • PUBLIC INTELLIGENCE",
 )
 
 # -----------------------------
@@ -217,12 +233,14 @@ st.markdown(
 # -----------------------------
 # Main navigation
 # -----------------------------
-tab_overview, tab_project, tab_quality, tab_geo, tab_explorer = st.tabs(
+tab_overview, tab_portfolio, tab_project, tab_quality, tab_geo, tab_time, tab_explorer = st.tabs(
     [
         "Executive Overview",
+        "Portfolio Intelligence",
         "Project Deep Dive",
-        "Quality Intelligence",
-        "Geography & Trends",
+        "Quality & Risk",
+        "Geography",
+        "Time Intelligence",
         "Data Explorer",
     ]
 )
@@ -259,17 +277,27 @@ with tab_overview:
     with c6:
         metric_card("Completion", f"{progress:.1%}", f"{total_remaining:,} remaining", "purple")
 
-    c1, c2, c3 = st.columns([1.1, 1.1, 0.9])
+    c1, c2, c3 = st.columns([1.15, 1.0, 0.85])
     with c1:
         st.plotly_chart(fig_scope_completion(summary), use_container_width=True, config={"displayModeBar": False})
     with c2:
         st.plotly_chart(fig_status_mix(total_approved, total_rejected, total_pending), use_container_width=True, config={"displayModeBar": False})
     with c3:
+        st.plotly_chart(fig_speedometer(progress, title="Portfolio Completion"), use_container_width=True, config={"displayModeBar": False})
+
+    c1, c2 = st.columns([1.25, 1])
+    with c1:
+        st.plotly_chart(fig_project_radar(summary), use_container_width=True, config={"displayModeBar": False})
+    with c2:
         dq = data_quality_summary(year_df, selected_year)
-        metric_card("QC Reviewed", f"{reviewed_rate:.1%}", "Approved + Rejected / Received", "cyan")
-        metric_card("Undated VT KII/FGD", f"{dq['undated_vt_kii_fgd']:,}", "Included in totals, excluded from trends", "amber")
-        metric_card("Future-dated", f"{dq['future_dated']:,}", "Check date quality", "red" if dq["future_dated"] else "green")
-        metric_card("Missing rejection reason", f"{dq['rejected_missing_reason']:,}", "Rejected records without documented reason", "red" if dq["rejected_missing_reason"] else "green")
+        panel_title("Data Quality Signals", "Checks that can materially affect interpretation")
+        d1, d2 = st.columns(2)
+        with d1:
+            metric_card("QC Reviewed", f"{reviewed_rate:.1%}", "Approved + Rejected / Received", "cyan")
+            metric_card("Future-dated", f"{dq['future_dated']:,}", "Dates later than today", "red" if dq["future_dated"] else "green")
+        with d2:
+            metric_card("Undated VT KII/FGD", f"{dq['undated_vt_kii_fgd']:,}", "Excluded from time charts", "amber")
+            metric_card("Missing rejection reason", f"{dq['rejected_missing_reason']:,}", "Rejected records without documented reason", "red" if dq["rejected_missing_reason"] else "green")
 
     section_header("Management Intelligence", "Automatic rule-based interpretation of the live data")
     insights = executive_insights(summary, year_df, selected_year)
@@ -307,6 +335,35 @@ with tab_overview:
     )
 
 # -----------------------------
+# Portfolio Intelligence
+# -----------------------------
+with tab_portfolio:
+    section_header("Portfolio Intelligence", "Advanced comparative analytics across all projects")
+    all_summary = portfolio_summary(year_df, SCOPES, projects=PROJECTS)
+
+    c1, c2 = st.columns([1.15, 1])
+    with c1:
+        st.plotly_chart(fig_treemap(all_summary), use_container_width=True, config={"displayModeBar": False})
+    with c2:
+        st.plotly_chart(fig_waterfall(all_summary), use_container_width=True, config={"displayModeBar": False})
+
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        st.plotly_chart(fig_funnel(all_summary), use_container_width=True, config={"displayModeBar": False})
+    with c2:
+        st.plotly_chart(fig_project_health_matrix(all_summary), use_container_width=True, config={"displayModeBar": False})
+
+    section_header("Project Comparison Table", "Scope, delivery, quality, QA review and backlog")
+    st.dataframe(
+        all_summary.style.format({
+            "Scope": "{:,.0f}", "Received": "{:,.0f}", "Approved": "{:,.0f}", "Rejected": "{:,.0f}",
+            "Pending / Unreviewed": "{:,.0f}", "Remaining": "{:,.0f}",
+            "Completion %": "{:.1%}", "Collection Coverage %": "{:.1%}", "Approval Rate %": "{:.1%}",
+            "Rejection Rate %": "{:.1%}", "QC Reviewed %": "{:.1%}", "Backlog %": "{:.1%}",
+        }), use_container_width=True, hide_index=True, height=320
+    )
+
+# -----------------------------
 # Project Deep Dive
 # -----------------------------
 with tab_project:
@@ -341,9 +398,16 @@ with tab_project:
     else:
         monthly = monthly_summary(deep_df, selected_year)
 
+        r0c1, r0c2 = st.columns([1.35, 1])
+        with r0c1:
+            st.plotly_chart(fig_monthly_trend(monthly, title=f"{active_project} Monthly Trend"), use_container_width=True, config={"displayModeBar": False})
+        with r0c2:
+            st.plotly_chart(fig_speedometer(psummary["Completion %"], title=f"{active_project} Completion"), use_container_width=True, config={"displayModeBar": False})
+
         r1c1, r1c2 = st.columns([1.35, 1])
         with r1c1:
-            st.plotly_chart(fig_monthly_trend(monthly, title=f"{active_project} Monthly Trend"), use_container_width=True, config={"displayModeBar": False})
+            qc_view = qc_reviewer_summary(deep_df)
+            st.plotly_chart(fig_qc_reviewer(qc_view), use_container_width=True, config={"displayModeBar": False})
         with r1c2:
             project_breakdowns = project_specific_breakdowns(deep_df, active_project)
             if active_project == "Moraa" and project_breakdowns.get("sunburst") is not None:
@@ -456,7 +520,11 @@ with tab_geo:
     with g1:
         st.plotly_chart(fig_province_status(prov, title="Province Status Mix"), use_container_width=True, config={"displayModeBar": False})
     with g2:
-        st.plotly_chart(fig_monthly_trend(monthly, title="Monthly Collection & QA Trend"), use_container_width=True, config={"displayModeBar": False})
+        pqi = province_quality_index(geo_df).head(25)
+        st.plotly_chart(fig_province_quality_scatter(pqi), use_container_width=True, config={"displayModeBar": False})
+
+    district = district_summary(geo_df).head(20)
+    st.plotly_chart(fig_category_bar(district, "District", "Records", "Top Districts by Volume"), use_container_width=True, config={"displayModeBar": False})
 
     section_header("Province Performance Table", "Volume, approval, rejection and pending QA")
     st.dataframe(
@@ -469,6 +537,20 @@ with tab_geo:
         hide_index=True,
         height=520,
     )
+
+# -----------------------------
+# Time Intelligence
+# -----------------------------
+with tab_time:
+    section_header("Time Intelligence", "Monthly flow and collection intensity across the reporting year")
+    time_df = filtered[filtered["date"].notna()].copy()
+    monthly_time = monthly_summary(time_df, selected_year)
+    calendar = calendar_heatmap_data(time_df, selected_year)
+    c1, c2 = st.columns([1.2, 1])
+    with c1:
+        st.plotly_chart(fig_monthly_trend(monthly_time, title="Monthly Collection & QA Trend"), use_container_width=True, config={"displayModeBar": False})
+    with c2:
+        st.plotly_chart(fig_calendar_heatmap(calendar), use_container_width=True, config={"displayModeBar": False})
 
 # -----------------------------
 # Data Explorer
