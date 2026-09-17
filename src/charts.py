@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import textwrap
+
 import numpy as np
 import pandas as pd
-
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -32,7 +33,192 @@ NAVY_LIGHT = "#10223A"
 
 
 # ============================================================
-# GLOBAL CHART LAYOUT
+# SAFE HELPERS
+# ============================================================
+
+def _is_empty(data) -> bool:
+    """
+    Safely test if a dataframe-like object is empty.
+    """
+
+    if data is None:
+        return True
+
+    try:
+        return data.empty
+    except Exception:
+        return False
+
+
+def _safe_numeric(
+    series: pd.Series,
+    default: float = 0.0,
+) -> pd.Series:
+    """
+    Convert a pandas series to numeric values without raising errors.
+    """
+
+    return (
+        pd.to_numeric(
+            series,
+            errors="coerce",
+        )
+        .replace(
+            [np.inf, -np.inf],
+            np.nan,
+        )
+        .fillna(default)
+    )
+
+
+def _safe_percent(
+    series: pd.Series,
+) -> pd.Series:
+    """
+    Convert a series to safe percentage ratios between 0 and 1.
+    """
+
+    return (
+        _safe_numeric(series)
+        .clip(
+            lower=0,
+            upper=1,
+        )
+    )
+
+
+def _has_columns(
+    df: pd.DataFrame,
+    columns: list[str],
+) -> bool:
+    """
+    Verify that all required columns exist.
+    """
+
+    if _is_empty(df):
+        return False
+
+    return all(
+        column in df.columns
+        for column in columns
+    )
+
+
+def _short_text(
+    value,
+    width: int = 72,
+) -> str:
+    """
+    Shorten long labels for chart axes while keeping them readable.
+    """
+
+    text = str(value or "").strip()
+
+    if not text:
+        return "Unknown"
+
+    return textwrap.shorten(
+        text,
+        width=width,
+        placeholder="…",
+    )
+
+
+def _colorbar(
+    title: str,
+    *,
+    percent: bool = False,
+    length: float = 0.72,
+) -> dict:
+    """
+    Return a Plotly-compatible colorbar configuration.
+
+    IMPORTANT:
+    Do not use `titlefont`.
+    Modern Plotly expects:
+        title=dict(text="...", font=dict(...))
+    """
+
+    config = dict(
+
+        title=dict(
+            text=title,
+            font=dict(
+                color=MUTED,
+                size=11,
+            ),
+        ),
+
+        tickfont=dict(
+            color=MUTED,
+            size=10,
+        ),
+
+        thickness=10,
+
+        len=length,
+
+        outlinewidth=0,
+
+        bgcolor="rgba(0,0,0,0)",
+    )
+
+    if percent:
+        config["tickformat"] = ".0%"
+
+    return config
+
+
+# ============================================================
+# EMPTY FIGURE
+# ============================================================
+
+def _empty_figure(
+    title: str,
+    message: str = "No data available for the current selection.",
+    *,
+    height: int = 420,
+):
+    """
+    Create a consistent empty-state chart.
+    """
+
+    fig = go.Figure()
+
+    fig.update_layout(
+        title=title,
+    )
+
+    fig.add_annotation(
+
+        x=0.5,
+        y=0.48,
+
+        xref="paper",
+        yref="paper",
+
+        text=message,
+
+        showarrow=False,
+
+        align="center",
+
+        font=dict(
+            color=MUTED,
+            size=13,
+        ),
+    )
+
+    return _layout(
+        fig,
+        height=height,
+        showlegend=False,
+        top_margin=92,
+    )
+
+
+# ============================================================
+# GLOBAL LAYOUT
 # ============================================================
 
 def _layout(
@@ -41,23 +227,17 @@ def _layout(
     margin: dict | None = None,
     *,
     showlegend: bool | None = None,
-    legend_y: float = 1.015,
+    legend_y: float = 1.02,
+    top_margin: int = 112,
 ):
     """
-    Apply the global dashboard visual system.
+    Global visual system for every Plotly chart.
 
-    Major design goals:
-    - Keep chart title clearly separated from legend.
-    - Provide enough top breathing room.
-    - Maintain a premium dark dashboard appearance.
-    - Standardize axes, hover cards and typography.
+    Title and legend receive separate visual space so they do not
+    collide, particularly on laptop displays.
     """
 
-    # --------------------------------------------------------
-    # MAIN LAYOUT
-    # --------------------------------------------------------
-
-    layout_updates = dict(
+    layout_settings = dict(
 
         height=height,
 
@@ -66,44 +246,34 @@ def _layout(
         plot_bgcolor=BG,
 
         font=dict(
-            family=(
-                "Inter, "
-                "Segoe UI, "
-                "Arial, "
-                "sans-serif"
-            ),
+            family="Inter, Segoe UI, Arial, sans-serif",
             color=TEXT,
             size=12,
         ),
 
         # ----------------------------------------------------
-        # CHART TITLE
+        # TITLE
         # ----------------------------------------------------
 
         title=dict(
 
             x=0.02,
 
-            # Keep title at the very top of the card.
             y=0.985,
 
             xanchor="left",
+
             yanchor="top",
 
             font=dict(
-                size=17,
+                family="Inter, Segoe UI, Arial, sans-serif",
                 color=TEXT_BRIGHT,
-                family=(
-                    "Inter, "
-                    "Segoe UI, "
-                    "Arial, "
-                    "sans-serif"
-                ),
+                size=17,
             ),
 
             pad=dict(
                 t=2,
-                b=20,
+                b=14,
             ),
         ),
 
@@ -117,13 +287,8 @@ def _layout(
             else dict(
                 l=24,
                 r=24,
-
-                # IMPORTANT:
-                # Larger top margin creates a dedicated zone
-                # for both title and legend.
-                t=115,
-
-                b=28,
+                t=top_margin,
+                b=30,
             )
         ),
 
@@ -133,18 +298,15 @@ def _layout(
 
         legend=dict(
 
-            # Horizontal legend looks cleaner in dashboard cards.
             orientation="h",
 
-            # Legend is located under the title
-            # and above the actual plot area.
-            yanchor="bottom",
+            x=0.02,
 
             y=legend_y,
 
             xanchor="left",
 
-            x=0.02,
+            yanchor="bottom",
 
             font=dict(
                 color=MUTED,
@@ -153,61 +315,48 @@ def _layout(
 
             bgcolor="rgba(0,0,0,0)",
 
-            bordercolor="rgba(0,0,0,0)",
-
             borderwidth=0,
+
+            tracegroupgap=8,
 
             itemclick="toggle",
 
             itemdoubleclick="toggleothers",
-
-            tracegroupgap=8,
         ),
 
         # ----------------------------------------------------
-        # HOVER TOOLTIP
+        # HOVER
         # ----------------------------------------------------
 
         hoverlabel=dict(
+
             bgcolor=NAVY,
+
             bordercolor="#1E334D",
 
             font=dict(
+                family="Inter, Segoe UI, Arial, sans-serif",
                 color="#FFFFFF",
                 size=12,
-                family=(
-                    "Inter, "
-                    "Segoe UI, "
-                    "Arial, "
-                    "sans-serif"
-                ),
             ),
         ),
-
-        # ----------------------------------------------------
-        # INTERACTION
-        # ----------------------------------------------------
-
-        hovermode="closest",
     )
 
 
     if showlegend is not None:
-        layout_updates["showlegend"] = showlegend
+        layout_settings["showlegend"] = showlegend
 
 
     fig.update_layout(
-        **layout_updates
+        **layout_settings
     )
 
 
     # --------------------------------------------------------
-    # X AXIS
+    # AXIS STYLE
     # --------------------------------------------------------
 
     fig.update_xaxes(
-
-        showgrid=True,
 
         gridcolor=GRID,
 
@@ -231,13 +380,7 @@ def _layout(
     )
 
 
-    # --------------------------------------------------------
-    # Y AXIS
-    # --------------------------------------------------------
-
     fig.update_yaxes(
-
-        showgrid=True,
 
         gridcolor=GRID,
 
@@ -265,25 +408,56 @@ def _layout(
 
 
 # ============================================================
-# COMPLETION VS REMAINING
+# COMPLETION VS REMAINING SCOPE
 # ============================================================
 
 def fig_scope_completion(
     summary: pd.DataFrame,
 ):
 
-    if summary is None or summary.empty:
+    required = [
+        "Project",
+        "Approved",
+        "Remaining",
+        "Completion %",
+    ]
 
-        return _layout(
-            go.Figure(),
-            height=410,
-            showlegend=False,
+
+    if not _has_columns(
+        summary,
+        required,
+    ):
+        return _empty_figure(
+            "Completion vs Remaining Scope"
         )
 
 
+    work = summary.copy()
+
+
+    work["Approved"] = (
+        _safe_numeric(
+            work["Approved"]
+        )
+    )
+
+
+    work["Remaining"] = (
+        _safe_numeric(
+            work["Remaining"]
+        )
+    )
+
+
+    work["Completion %"] = (
+        _safe_percent(
+            work["Completion %"]
+        )
+    )
+
+
     work = (
-        summary
-        .copy()
+        work
         .sort_values(
             "Completion %",
             ascending=True,
@@ -294,17 +468,17 @@ def fig_scope_completion(
     fig = go.Figure()
 
 
-    # --------------------------------------------------------
-    # APPROVED
-    # --------------------------------------------------------
-
     fig.add_trace(
 
         go.Bar(
 
-            y=work["Project"],
+            y=work[
+                "Project"
+            ],
 
-            x=work["Approved"],
+            x=work[
+                "Approved"
+            ],
 
             name="Approved",
 
@@ -312,9 +486,6 @@ def fig_scope_completion(
 
             marker=dict(
                 color=GREEN,
-                line=dict(
-                    width=0,
-                ),
             ),
 
             hovertemplate=(
@@ -327,17 +498,17 @@ def fig_scope_completion(
     )
 
 
-    # --------------------------------------------------------
-    # REMAINING
-    # --------------------------------------------------------
-
     fig.add_trace(
 
         go.Bar(
 
-            y=work["Project"],
+            y=work[
+                "Project"
+            ],
 
-            x=work["Remaining"],
+            x=work[
+                "Remaining"
+            ],
 
             name="Remaining",
 
@@ -345,9 +516,6 @@ def fig_scope_completion(
 
             marker=dict(
                 color="#26364B",
-                line=dict(
-                    width=0,
-                ),
             ),
 
             hovertemplate=(
@@ -362,22 +530,25 @@ def fig_scope_completion(
 
     fig.update_layout(
 
+        title=(
+            "Completion vs Remaining Scope"
+        ),
+
         barmode="stack",
 
-        title="Completion vs Remaining Scope",
+        bargap=0.34,
 
         xaxis_title="Records",
 
         yaxis_title="",
-
-        bargap=0.34,
     )
 
 
     return _layout(
         fig,
-        height=420,
+        height=430,
         legend_y=1.02,
+        top_margin=118,
     )
 
 
@@ -391,11 +562,20 @@ def fig_status_mix(
     pending: int,
 ):
 
-    labels = [
-        "Approved",
-        "Rejected",
-        "Pending",
-    ]
+    approved = max(
+        float(approved or 0),
+        0,
+    )
+
+    rejected = max(
+        float(rejected or 0),
+        0,
+    )
+
+    pending = max(
+        float(pending or 0),
+        0,
+    )
 
 
     values = [
@@ -410,11 +590,23 @@ def fig_status_mix(
     )
 
 
+    if total <= 0:
+
+        return _empty_figure(
+            "Portfolio QA Status",
+            "No QA status records are available.",
+        )
+
+
     fig = go.Figure(
 
         go.Pie(
 
-            labels=labels,
+            labels=[
+                "Approved",
+                "Rejected",
+                "Pending",
+            ],
 
             values=values,
 
@@ -459,14 +651,20 @@ def fig_status_mix(
 
     fig.update_layout(
 
-        title="Portfolio QA Status",
+        title=(
+            "Portfolio QA Status"
+        ),
 
         annotations=[
 
             dict(
 
+                x=0.5,
+
+                y=0.5,
+
                 text=(
-                    f"<b>{total:,}</b>"
+                    f"<b>{total:,.0f}</b>"
                     "<br>"
                     "<span style='"
                     "font-size:11px;"
@@ -475,10 +673,6 @@ def fig_status_mix(
                     "received"
                     "</span>"
                 ),
-
-                x=0.5,
-
-                y=0.5,
 
                 showarrow=False,
 
@@ -493,8 +687,9 @@ def fig_status_mix(
 
     return _layout(
         fig,
-        height=420,
+        height=430,
         legend_y=1.02,
+        top_margin=118,
     )
 
 
@@ -507,10 +702,20 @@ def fig_speedometer(
     title="Completion",
 ):
 
+    try:
+        value = float(value)
+    except Exception:
+        value = 0.0
+
+
+    if not np.isfinite(value):
+        value = 0.0
+
+
     value = max(
         0,
         min(
-            float(value),
+            value,
             1,
         ),
     )
@@ -522,11 +727,16 @@ def fig_speedometer(
 
             mode="gauge+number",
 
-            value=value * 100,
+            value=(
+                value
+                * 100
+            ),
 
             number=dict(
 
                 suffix="%",
+
+                valueformat=".1f",
 
                 font=dict(
                     size=38,
@@ -534,9 +744,20 @@ def fig_speedometer(
                 ),
             ),
 
+            title=dict(
+
+                text=title,
+
+                font=dict(
+                    size=17,
+                    color=TEXT_BRIGHT,
+                ),
+            ),
+
             gauge=dict(
 
                 axis=dict(
+
                     range=[
                         0,
                         100,
@@ -546,9 +767,8 @@ def fig_speedometer(
 
                     tickfont=dict(
                         color=MUTED,
+                        size=10,
                     ),
-
-                    tickwidth=0,
                 ),
 
                 bar=dict(
@@ -604,17 +824,10 @@ def fig_speedometer(
 
                     thickness=0.75,
 
-                    value=value * 100,
-                ),
-            ),
-
-            title=dict(
-
-                text=title,
-
-                font=dict(
-                    size=17,
-                    color=TEXT,
+                    value=(
+                        value
+                        * 100
+                    ),
                 ),
             ),
         )
@@ -622,9 +835,21 @@ def fig_speedometer(
 
 
     return _layout(
+
         fig,
-        height=420,
+
+        height=430,
+
         showlegend=False,
+
+        top_margin=70,
+
+        margin=dict(
+            l=25,
+            r=25,
+            t=70,
+            b=20,
+        ),
     )
 
 
@@ -637,7 +862,27 @@ def fig_monthly_trend(
     title="Monthly Collection & QA Trend",
 ):
 
-    fig = go.Figure()
+    required = [
+        "Month",
+        "Received",
+        "Approved",
+        "Rejected",
+        "Pending",
+    ]
+
+
+    if not _has_columns(
+        monthly,
+        required,
+    ):
+        return _empty_figure(
+            title
+        )
+
+
+    work = (
+        monthly.copy()
+    )
 
 
     colors = {
@@ -652,6 +897,9 @@ def fig_monthly_trend(
     }
 
 
+    fig = go.Figure()
+
+
     for column in [
         "Received",
         "Approved",
@@ -659,21 +907,22 @@ def fig_monthly_trend(
         "Pending",
     ]:
 
-        if column not in monthly.columns:
-            continue
+        values = (
+            _safe_numeric(
+                work[column]
+            )
+        )
 
 
         fig.add_trace(
 
             go.Scatter(
 
-                x=monthly[
+                x=work[
                     "Month"
                 ],
 
-                y=monthly[
-                    column
-                ],
+                y=values,
 
                 mode=(
                     "lines+markers"
@@ -691,7 +940,7 @@ def fig_monthly_trend(
 
                     shape="spline",
 
-                    smoothing=0.55,
+                    smoothing=0.45,
                 ),
 
                 marker=dict(
@@ -703,7 +952,7 @@ def fig_monthly_trend(
                     ],
 
                     line=dict(
-                        width=1.5,
+                        width=1,
                         color="#07111F",
                     ),
                 ),
@@ -745,11 +994,20 @@ def fig_monthly_trend(
     )
 
 
-    return _layout(
+    result = _layout(
         fig,
-        height=440,
+        height=450,
         legend_y=1.02,
+        top_margin=118,
     )
+
+
+    result.update_layout(
+        hovermode="x unified"
+    )
+
+
+    return result
 
 
 # ============================================================
@@ -760,16 +1018,9 @@ def fig_project_health_matrix(
     summary: pd.DataFrame,
 ):
 
-    if summary is None or summary.empty:
+    required = [
 
-        return _layout(
-            go.Figure(),
-            height=440,
-            showlegend=False,
-        )
-
-
-    metrics = [
+        "Project",
 
         "Completion %",
 
@@ -783,35 +1034,90 @@ def fig_project_health_matrix(
     ]
 
 
-    z = (
-        summary[
-            metrics
-        ]
+    if not _has_columns(
+        summary,
+        required,
+    ):
+
+        return _empty_figure(
+            "Portfolio Health Matrix"
+        )
+
+
+    matrix = pd.DataFrame(
+
+        {
+            "Completion %": (
+                _safe_percent(
+                    summary[
+                        "Completion %"
+                    ]
+                )
+            ),
+
+            "Approval Rate %": (
+                _safe_percent(
+                    summary[
+                        "Approval Rate %"
+                    ]
+                )
+            ),
+
+            "QC Reviewed %": (
+                _safe_percent(
+                    summary[
+                        "QC Reviewed %"
+                    ]
+                )
+            ),
+
+            "Rejection Rate %": (
+                _safe_percent(
+                    summary[
+                        "Rejection Rate %"
+                    ]
+                )
+            ),
+
+            "Backlog %": (
+                _safe_percent(
+                    summary[
+                        "Backlog %"
+                    ]
+                )
+            ),
+        }
+    )
+
+
+    raw_values = (
+        matrix
         .to_numpy(
             dtype=float
         )
     )
 
 
-    # Convert risk metrics so high score = better.
-    display = (
-        z.copy()
+    health_values = (
+        raw_values.copy()
     )
 
 
-    display[:, 3] = (
+    # Lower rejection is healthier.
+    health_values[:, 3] = (
         1
-        - display[:, 3]
+        - health_values[:, 3]
     )
 
 
-    display[:, 4] = (
+    # Lower backlog is healthier.
+    health_values[:, 4] = (
         1
-        - display[:, 4]
+        - health_values[:, 4]
     )
 
 
-    text = [
+    text_values = [
 
         [
             f"{value:.1%}"
@@ -820,91 +1126,151 @@ def fig_project_health_matrix(
         ]
 
         for row
-        in z
+        in raw_values
     ]
 
 
-    fig = go.Figure(
+    project_labels = (
 
-        go.Heatmap(
-
-            z=display,
-
-            x=[
-                "Completion",
-                "Approval",
-                "QC Reviewed",
-                "Low Rejection",
-                "Low Backlog",
-            ],
-
-            y=summary[
-                "Project"
-            ],
-
-            text=text,
-
-            texttemplate=(
-                "%{text}"
-            ),
-
-            textfont=dict(
-                color="#FFFFFF",
-                size=11,
-            ),
-
-            colorscale=[
-
-                [
-                    0,
-                    "#7F1D1D",
-                ],
-
-                [
-                    0.45,
-                    "#D97706",
-                ],
-
-                [
-                    1,
-                    "#15803D",
-                ],
-            ],
-
-            zmin=0,
-
-            zmax=1,
-
-            colorbar=dict(
-
-                title="Health",
-
-                tickfont=dict(
-                    color=MUTED,
-                ),
-
-                titlefont=dict(
-                    color=MUTED,
-                ),
-
-                thickness=10,
-
-                len=0.75,
-            ),
-
-            hovertemplate=(
-                "<b>%{y}</b>"
-                "<br>"
-                "%{x}: %{text}"
-                "<extra></extra>"
-            ),
+        summary[
+            "Project"
+        ]
+        .fillna(
+            "Unknown"
         )
+        .astype(str)
+        .tolist()
+    )
+
+
+    fig = go.Figure()
+
+
+    heatmap = go.Heatmap(
+
+        z=health_values,
+
+        x=[
+
+            "Completion",
+
+            "Approval",
+
+            "QC Reviewed",
+
+            "Low Rejection",
+
+            "Low Backlog",
+        ],
+
+        y=project_labels,
+
+        text=text_values,
+
+        texttemplate="%{text}",
+
+        colorscale=[
+
+            [
+                0.00,
+                "#7F1D1D",
+            ],
+
+            [
+                0.25,
+                "#B91C1C",
+            ],
+
+            [
+                0.45,
+                "#D97706",
+            ],
+
+            [
+                0.65,
+                "#CA8A04",
+            ],
+
+            [
+                0.80,
+                "#16A34A",
+            ],
+
+            [
+                1.00,
+                "#15803D",
+            ],
+        ],
+
+        zmin=0,
+
+        zmax=1,
+
+        colorbar=dict(
+
+            title=dict(
+
+                text="Health",
+
+                font=dict(
+                    color=MUTED,
+                    size=11,
+                ),
+            ),
+
+            tickfont=dict(
+                color=MUTED,
+                size=10,
+            ),
+
+            thickness=10,
+
+            len=0.72,
+
+            x=1.02,
+
+            outlinewidth=0,
+
+            bgcolor=(
+                "rgba(0,0,0,0)"
+            ),
+
+            tickvals=[
+                0,
+                0.5,
+                1,
+            ],
+
+            ticktext=[
+                "Weak",
+                "Watch",
+                "Strong",
+            ],
+        ),
+
+        hovertemplate=(
+            "<b>%{y}</b>"
+            "<br>"
+            "%{x}: %{text}"
+            "<extra></extra>"
+        ),
+
+        xgap=3,
+
+        ygap=3,
+    )
+
+
+    fig.add_trace(
+        heatmap
     )
 
 
     fig.update_layout(
 
-        title="Portfolio Health Matrix",
+        title=(
+            "Portfolio Health Matrix"
+        ),
 
         xaxis_title="",
 
@@ -912,31 +1278,75 @@ def fig_project_health_matrix(
     )
 
 
+    fig.update_xaxes(
+
+        side="top",
+
+        showgrid=False,
+
+        zeroline=False,
+    )
+
+
+    fig.update_yaxes(
+
+        autorange="reversed",
+
+        showgrid=False,
+
+        zeroline=False,
+    )
+
+
     return _layout(
+
         fig,
-        height=450,
+
+        height=480,
+
         showlegend=False,
+
+        margin=dict(
+            l=100,
+            r=90,
+            t=105,
+            b=35,
+        ),
     )
 
 
 # ============================================================
-# PROJECT RADAR
+# PROJECT PERFORMANCE RADAR
 # ============================================================
 
 def fig_project_radar(
     summary: pd.DataFrame,
 ):
 
-    if summary is None or summary.empty:
+    required = [
 
-        return _layout(
-            go.Figure(),
-            height=450,
-            showlegend=False,
+        "Project",
+
+        "Completion %",
+
+        "Approval Rate %",
+
+        "QC Reviewed %",
+
+        "Rejection Rate %",
+
+        "Backlog %",
+    ]
+
+
+    if not _has_columns(
+        summary,
+        required,
+    ):
+
+        return _empty_figure(
+            "Project Performance Radar"
         )
-
-
-    fig = go.Figure()
 
 
     theta = [
@@ -966,73 +1376,172 @@ def fig_project_radar(
         AMBER,
 
         "#14B8A6",
+
+        "#E879F9",
     ]
 
 
-    for index, row in summary.iterrows():
+    fig = go.Figure()
+
+
+    for position, (_, row) in enumerate(
+        summary.iterrows()
+    ):
+
+        completion = float(
+            np.clip(
+                pd.to_numeric(
+                    row[
+                        "Completion %"
+                    ],
+                    errors="coerce",
+                )
+                if pd.notna(
+                    row[
+                        "Completion %"
+                    ]
+                )
+                else 0,
+                0,
+                1,
+            )
+        )
+
+
+        approval = float(
+            np.clip(
+                pd.to_numeric(
+                    row[
+                        "Approval Rate %"
+                    ],
+                    errors="coerce",
+                )
+                if pd.notna(
+                    row[
+                        "Approval Rate %"
+                    ]
+                )
+                else 0,
+                0,
+                1,
+            )
+        )
+
+
+        reviewed = float(
+            np.clip(
+                pd.to_numeric(
+                    row[
+                        "QC Reviewed %"
+                    ],
+                    errors="coerce",
+                )
+                if pd.notna(
+                    row[
+                        "QC Reviewed %"
+                    ]
+                )
+                else 0,
+                0,
+                1,
+            )
+        )
+
+
+        rejection = float(
+            np.clip(
+                pd.to_numeric(
+                    row[
+                        "Rejection Rate %"
+                    ],
+                    errors="coerce",
+                )
+                if pd.notna(
+                    row[
+                        "Rejection Rate %"
+                    ]
+                )
+                else 0,
+                0,
+                1,
+            )
+        )
+
+
+        backlog = float(
+            np.clip(
+                pd.to_numeric(
+                    row[
+                        "Backlog %"
+                    ],
+                    errors="coerce",
+                )
+                if pd.notna(
+                    row[
+                        "Backlog %"
+                    ]
+                )
+                else 0,
+                0,
+                1,
+            )
+        )
+
 
         values = [
 
-            row[
-                "Completion %"
-            ],
+            completion,
 
-            row[
-                "Approval Rate %"
-            ],
+            approval,
 
-            row[
-                "QC Reviewed %"
-            ],
+            reviewed,
 
-            (
-                1
-                - row[
-                    "Rejection Rate %"
-                ]
-            ),
+            1 - rejection,
 
-            (
-                1
-                - row[
-                    "Backlog %"
-                ]
-            ),
+            1 - backlog,
         ]
+
+
+        closed_values = (
+            values
+            + [
+                values[0]
+            ]
+        )
+
+
+        closed_theta = (
+            theta
+            + [
+                theta[0]
+            ]
+        )
 
 
         fig.add_trace(
 
             go.Scatterpolar(
 
-                r=(
-                    values
-                    + [
-                        values[0]
-                    ]
-                ),
+                r=closed_values,
 
-                theta=(
-                    theta
-                    + [
-                        theta[0]
-                    ]
-                ),
+                theta=closed_theta,
 
                 fill="toself",
 
                 opacity=0.18,
 
-                name=row[
-                    "Project"
-                ],
+                name=str(
+                    row[
+                        "Project"
+                    ]
+                ),
 
                 line=dict(
 
                     width=2,
 
                     color=colors[
-                        index
+                        position
                         % len(colors)
                     ],
                 ),
@@ -1087,9 +1596,14 @@ def fig_project_radar(
 
 
     return _layout(
+
         fig,
-        height=470,
+
+        height=480,
+
         legend_y=1.02,
+
+        top_margin=118,
     )
 
 
@@ -1101,17 +1615,54 @@ def fig_treemap(
     summary: pd.DataFrame,
 ):
 
-    if summary is None or summary.empty:
+    required = [
 
-        return _layout(
-            go.Figure(),
-            height=450,
-            showlegend=False,
+        "Project",
+
+        "Scope",
+
+        "Completion %",
+
+        "Received",
+
+        "Approved",
+
+        "Rejected",
+
+        "Pending / Unreviewed",
+    ]
+
+
+    if not _has_columns(
+        summary,
+        required,
+    ):
+
+        return _empty_figure(
+            "Portfolio Scope & Completion Treemap"
         )
 
 
     work = (
         summary.copy()
+    )
+
+
+    work["Scope"] = (
+        _safe_numeric(
+            work[
+                "Scope"
+            ]
+        )
+    )
+
+
+    work["Completion %"] = (
+        _safe_percent(
+            work[
+                "Completion %"
+            ]
+        )
     )
 
 
@@ -1130,8 +1681,11 @@ def fig_treemap(
         ),
 
         color_continuous_scale=[
+
             "#7F1D1D",
+
             "#D97706",
+
             "#15803D",
         ],
 
@@ -1157,39 +1711,60 @@ def fig_treemap(
             "Portfolio Scope & Completion Treemap"
         ),
 
-        coloraxis_colorbar=dict(
-            title="Completion",
-            tickformat=".0%",
+        coloraxis_colorbar=_colorbar(
+            "Completion",
+            percent=True,
         ),
     )
 
 
     return _layout(
+
         fig,
+
         height=470,
+
         showlegend=False,
+
+        top_margin=90,
     )
 
 
 # ============================================================
-# REMAINING SCOPE WATERFALL
+# REMAINING SCOPE PRESSURE
 # ============================================================
 
 def fig_waterfall(
     summary: pd.DataFrame,
 ):
 
-    if summary is None or summary.empty:
+    required = [
+        "Project",
+        "Remaining",
+    ]
 
-        return _layout(
-            go.Figure(),
-            height=440,
-            showlegend=False,
+
+    if not _has_columns(
+        summary,
+        required,
+    ):
+
+        return _empty_figure(
+            "Remaining Scope Pressure"
         )
 
 
     work = (
         summary.copy()
+    )
+
+
+    work["Remaining"] = (
+        _safe_numeric(
+            work[
+                "Remaining"
+            ]
+        )
     )
 
 
@@ -1229,6 +1804,13 @@ def fig_waterfall(
                 ),
             ),
 
+            decreasing=dict(
+
+                marker=dict(
+                    color=CYAN,
+                ),
+            ),
+
             hovertemplate=(
                 "<b>%{x}</b>"
                 "<br>"
@@ -1245,70 +1827,99 @@ def fig_waterfall(
             "Remaining Scope Pressure"
         ),
 
+        xaxis_title="",
+
         yaxis_title=(
             "Remaining approvals"
         ),
-
-        xaxis_title="",
     )
 
 
     return _layout(
+
         fig,
+
         height=450,
+
         showlegend=False,
+
+        top_margin=92,
     )
 
 
 # ============================================================
-# DELIVERY FUNNEL
+# PORTFOLIO DELIVERY FUNNEL
 # ============================================================
 
 def fig_funnel(
     summary: pd.DataFrame,
 ):
 
-    if summary is None or summary.empty:
+    required = [
 
-        return _layout(
-            go.Figure(),
-            height=450,
-            showlegend=False,
+        "Scope",
+
+        "Received",
+
+        "Approved",
+
+        "Rejected",
+    ]
+
+
+    if not _has_columns(
+        summary,
+        required,
+    ):
+
+        return _empty_figure(
+            "Portfolio Delivery Funnel"
         )
 
 
     total_scope = (
-        summary[
-            "Scope"
-        ].sum()
+        _safe_numeric(
+            summary[
+                "Scope"
+            ]
+        )
+        .sum()
     )
 
 
     total_received = (
-        summary[
-            "Received"
-        ].sum()
-    )
-
-
-    total_reviewed = (
-
-        summary[
-            "Approved"
-        ].sum()
-
-        +
-
-        summary[
-            "Rejected"
-        ].sum()
+        _safe_numeric(
+            summary[
+                "Received"
+            ]
+        )
+        .sum()
     )
 
 
     total_approved = (
-        summary[
-            "Approved"
-        ].sum()
+        _safe_numeric(
+            summary[
+                "Approved"
+            ]
+        )
+        .sum()
+    )
+
+
+    total_rejected = (
+        _safe_numeric(
+            summary[
+                "Rejected"
+            ]
+        )
+        .sum()
+    )
+
+
+    total_reviewed = (
+        total_approved
+        + total_rejected
     )
 
 
@@ -1381,14 +1992,19 @@ def fig_funnel(
 
 
     return _layout(
+
         fig,
+
         height=450,
+
         showlegend=False,
+
+        top_margin=92,
     )
 
 
 # ============================================================
-# PROVINCE STATUS MIX
+# PROVINCE STATUS
 # ============================================================
 
 def fig_province_status(
@@ -1396,21 +2012,56 @@ def fig_province_status(
     title="Province Status Mix",
 ):
 
-    if (
-        province_data is None
-        or province_data.empty
+    required = [
+
+        "Province",
+
+        "Received",
+
+        "Approved",
+
+        "Rejected",
+
+        "Pending",
+    ]
+
+
+    if not _has_columns(
+        province_data,
+        required,
     ):
 
-        return _layout(
-            go.Figure(),
-            height=490,
-            showlegend=False,
+        return _empty_figure(
+            title
+        )
+
+
+    work = (
+        province_data.copy()
+    )
+
+
+    for column in [
+
+        "Received",
+
+        "Approved",
+
+        "Rejected",
+
+        "Pending",
+    ]:
+
+        work[column] = (
+            _safe_numeric(
+                work[column]
+            )
         )
 
 
     work = (
 
-        province_data
+        work
         .sort_values(
             "Received",
             ascending=True,
@@ -1473,75 +2124,142 @@ def fig_province_status(
 
     fig.update_layout(
 
+        title=title,
+
         barmode="stack",
 
-        title=title,
+        bargap=0.27,
 
         xaxis_title="Records",
 
         yaxis_title="",
-
-        bargap=0.26,
     )
 
 
     return _layout(
+
         fig,
+
         height=520,
+
         legend_y=1.02,
+
+        top_margin=118,
     )
 
 
 # ============================================================
-# PROVINCE QUALITY / VOLUME
+# PROVINCE QUALITY VS VOLUME
 # ============================================================
 
 def fig_province_quality_scatter(
     province_quality: pd.DataFrame,
 ):
 
-    if (
-        province_quality is None
-        or province_quality.empty
+    required = [
+
+        "Province",
+
+        "Received",
+
+        "Quality Index",
+
+        "Rejection Rate %",
+
+        "Approved",
+
+        "Rejected",
+
+        "Pending",
+
+        "Approval Rate %",
+
+        "Backlog %",
+    ]
+
+
+    if not _has_columns(
+        province_quality,
+        required,
     ):
 
-        return _layout(
-            go.Figure(),
-            height=480,
-            showlegend=False,
+        return _empty_figure(
+            "Province Quality vs Volume"
         )
+
+
+    work = (
+        province_quality.copy()
+    )
+
+
+    work["Received"] = (
+        _safe_numeric(
+            work[
+                "Received"
+            ]
+        )
+    )
+
+
+    work["Quality Index"] = (
+        _safe_percent(
+            work[
+                "Quality Index"
+            ]
+        )
+    )
+
+
+    work["Rejection Rate %"] = (
+        _safe_percent(
+            work[
+                "Rejection Rate %"
+            ]
+        )
+    )
+
+
+    work["Bubble Size"] = (
+        work[
+            "Received"
+        ]
+        .clip(
+            lower=1
+        )
+    )
 
 
     fig = px.scatter(
 
-        province_quality,
+        work,
 
         x="Received",
 
         y="Quality Index",
 
-        size="Received",
+        size="Bubble Size",
 
         color=(
             "Rejection Rate %"
         ),
 
-        hover_name=(
-            "Province"
-        ),
+        hover_name="Province",
 
-        hover_data=[
+        hover_data={
 
-            "Approved",
+            "Bubble Size": False,
 
-            "Rejected",
+            "Approved": True,
 
-            "Pending",
+            "Rejected": True,
 
-            "Approval Rate %",
+            "Pending": True,
 
-            "Backlog %",
-        ],
+            "Approval Rate %": ":.1%",
+
+            "Backlog %": ":.1%",
+        },
 
         color_continuous_scale=[
 
@@ -1564,17 +2282,22 @@ def fig_province_quality_scatter(
 
         yaxis_tickformat=".0%",
 
-        coloraxis_colorbar=dict(
-            title="Rejection",
-            tickformat=".0%",
+        coloraxis_colorbar=_colorbar(
+            "Rejection",
+            percent=True,
         ),
     )
 
 
     return _layout(
+
         fig,
+
         height=490,
+
         showlegend=False,
+
+        top_margin=92,
     )
 
 
@@ -1587,44 +2310,68 @@ def fig_rejection_pareto(
     title="Top Rejection Reasons",
 ):
 
-    if (
-        reasons is None
-        or reasons.empty
+    required = [
+        "Reason",
+        "Count",
+    ]
+
+
+    if not _has_columns(
+        reasons,
+        required,
     ):
 
-        fig = go.Figure()
+        return _empty_figure(
 
+            title,
 
-        fig.add_annotation(
+            "No rejected records are available in the current view.",
 
-            text=(
-                "No rejected records "
-                "in the current view"
-            ),
-
-            showarrow=False,
-
-            font=dict(
-                color=MUTED,
-                size=13,
-            ),
-        )
-
-
-        fig.update_layout(
-            title=title
-        )
-
-
-        return _layout(
-            fig,
-            height=470,
-            showlegend=False,
+            height=500,
         )
 
 
     work = (
-        reasons
+        reasons.copy()
+    )
+
+
+    work["Count"] = (
+        _safe_numeric(
+            work[
+                "Count"
+            ]
+        )
+    )
+
+
+    work["Full Reason"] = (
+        work[
+            "Reason"
+        ]
+        .fillna(
+            "No reason documented"
+        )
+        .astype(str)
+    )
+
+
+    work["Reason Display"] = (
+        work[
+            "Full Reason"
+        ]
+        .map(
+            lambda value:
+            _short_text(
+                value,
+                width=78,
+            )
+        )
+    )
+
+
+    work = (
+        work
         .sort_values(
             "Count",
             ascending=True,
@@ -1637,11 +2384,15 @@ def fig_rejection_pareto(
         go.Bar(
 
             y=work[
-                "Reason"
+                "Reason Display"
             ],
 
             x=work[
                 "Count"
+            ],
+
+            customdata=work[
+                "Full Reason"
             ],
 
             orientation="h",
@@ -1660,7 +2411,7 @@ def fig_rejection_pareto(
                     ],
 
                     [
-                        0.5,
+                        0.50,
                         "#7C3AED",
                     ],
 
@@ -1672,7 +2423,7 @@ def fig_rejection_pareto(
             ),
 
             hovertemplate=(
-                "<b>%{y}</b>"
+                "<b>%{customdata}</b>"
                 "<br>"
                 "Rejected: %{x:,}"
                 "<extra></extra>"
@@ -1691,12 +2442,7 @@ def fig_rejection_pareto(
 
         yaxis_title="",
 
-        bargap=0.22,
-    )
-
-
-    fig.update_yaxes(
-        automargin=True
+        bargap=0.24,
     )
 
 
@@ -1704,16 +2450,16 @@ def fig_rejection_pareto(
 
         fig,
 
-        height=540,
-
-        margin=dict(
-            l=24,
-            r=20,
-            t=105,
-            b=30,
-        ),
+        height=560,
 
         showlegend=False,
+
+        margin=dict(
+            l=30,
+            r=25,
+            t=100,
+            b=35,
+        ),
     )
 
 
@@ -1725,15 +2471,33 @@ def fig_vt_tool_bubble(
     vt_summary: pd.DataFrame,
 ):
 
-    if (
-        vt_summary is None
-        or vt_summary.empty
+    required = [
+
+        "VT Tool Type",
+
+        "Received",
+
+        "Approved",
+
+        "Rejected",
+
+        "Pending",
+
+        "Approval Rate %",
+
+        "Rejection Rate %",
+
+        "Backlog %",
+    ]
+
+
+    if not _has_columns(
+        vt_summary,
+        required,
     ):
 
-        return _layout(
-            go.Figure(),
-            height=460,
-            showlegend=False,
+        return _empty_figure(
+            "VT Tool Risk Map"
         )
 
 
@@ -1742,13 +2506,49 @@ def fig_vt_tool_bubble(
     )
 
 
-    work[
-        "Bubble"
-    ] = np.maximum(
+    work["Received"] = (
+        _safe_numeric(
+            work[
+                "Received"
+            ]
+        )
+    )
+
+
+    work["Approval Rate %"] = (
+        _safe_percent(
+            work[
+                "Approval Rate %"
+            ]
+        )
+    )
+
+
+    work["Rejection Rate %"] = (
+        _safe_percent(
+            work[
+                "Rejection Rate %"
+            ]
+        )
+    )
+
+
+    work["Backlog %"] = (
+        _safe_percent(
+            work[
+                "Backlog %"
+            ]
+        )
+    )
+
+
+    work["Bubble"] = (
         work[
             "Received"
-        ],
-        10,
+        ]
+        .clip(
+            lower=10
+        )
     )
 
 
@@ -1783,6 +2583,8 @@ def fig_vt_tool_bubble(
             "Pending": True,
 
             "Bubble": False,
+
+            "Backlog %": ":.1%",
         },
 
         color_continuous_scale=[
@@ -1800,25 +2602,30 @@ def fig_vt_tool_bubble(
 
     fig.update_layout(
 
-        title="VT Tool Risk Map",
+        title=(
+            "VT Tool Risk Map"
+        ),
 
         xaxis_tickformat=".0%",
 
         yaxis_tickformat=".0%",
 
-        coloraxis_colorbar=dict(
-
-            title="Backlog",
-
-            tickformat=".0%",
+        coloraxis_colorbar=_colorbar(
+            "Backlog",
+            percent=True,
         ),
     )
 
 
     return _layout(
+
         fig,
-        height=470,
+
+        height=480,
+
         showlegend=False,
+
+        top_margin=92,
     )
 
 
@@ -1830,21 +2637,79 @@ def fig_staff_scatter(
     staff: pd.DataFrame,
 ):
 
-    if (
-        staff is None
-        or staff.empty
+    required = [
+
+        "Field Staff",
+
+        "Received",
+
+        "Approved",
+
+        "Rejected",
+
+        "Pending",
+
+        "Approval Rate %",
+
+        "Rejection Rate %",
+    ]
+
+
+    if not _has_columns(
+        staff,
+        required,
     ):
 
-        return _layout(
-            go.Figure(),
-            height=500,
-            showlegend=False,
+        return _empty_figure(
+            "Field Staff Performance Map (Pseudonymized)"
         )
+
+
+    work = (
+        staff.copy()
+    )
+
+
+    work["Received"] = (
+        _safe_numeric(
+            work[
+                "Received"
+            ]
+        )
+    )
+
+
+    work["Approval Rate %"] = (
+        _safe_percent(
+            work[
+                "Approval Rate %"
+            ]
+        )
+    )
+
+
+    work["Rejection Rate %"] = (
+        _safe_percent(
+            work[
+                "Rejection Rate %"
+            ]
+        )
+    )
+
+
+    work["Bubble"] = (
+        work[
+            "Received"
+        ]
+        .clip(
+            lower=1
+        )
+    )
 
 
     fig = px.scatter(
 
-        staff,
+        work,
 
         x="Received",
 
@@ -1852,7 +2717,7 @@ def fig_staff_scatter(
             "Approval Rate %"
         ),
 
-        size="Received",
+        size="Bubble",
 
         color=(
             "Rejection Rate %"
@@ -1862,14 +2727,16 @@ def fig_staff_scatter(
             "Field Staff"
         ),
 
-        hover_data=[
+        hover_data={
 
-            "Approved",
+            "Approved": True,
 
-            "Rejected",
+            "Rejected": True,
 
-            "Pending",
-        ],
+            "Pending": True,
+
+            "Bubble": False,
+        },
 
         color_continuous_scale=[
 
@@ -1887,25 +2754,27 @@ def fig_staff_scatter(
     fig.update_layout(
 
         title=(
-            "Field Staff Performance Map "
-            "(Pseudonymized)"
+            "Field Staff Performance Map (Pseudonymized)"
         ),
 
         yaxis_tickformat=".0%",
 
-        coloraxis_colorbar=dict(
-
-            title="Rejection",
-
-            tickformat=".0%",
+        coloraxis_colorbar=_colorbar(
+            "Rejection",
+            percent=True,
         ),
     )
 
 
     return _layout(
+
         fig,
+
         height=520,
+
         showlegend=False,
+
+        top_margin=92,
     )
 
 
@@ -1917,21 +2786,52 @@ def fig_qc_reviewer(
     qc: pd.DataFrame,
 ):
 
-    if (
-        qc is None
-        or qc.empty
+    required = [
+
+        "QA Reviewer",
+
+        "Reviewed",
+
+        "Approved",
+
+        "Rejected",
+    ]
+
+
+    if not _has_columns(
+        qc,
+        required,
     ):
 
-        return _layout(
-            go.Figure(),
-            height=450,
-            showlegend=False,
+        return _empty_figure(
+            "QA Reviewer Workload & Outcomes"
+        )
+
+
+    work = (
+        qc.copy()
+    )
+
+
+    for column in [
+
+        "Reviewed",
+
+        "Approved",
+
+        "Rejected",
+    ]:
+
+        work[column] = (
+            _safe_numeric(
+                work[column]
+            )
         )
 
 
     work = (
 
-        qc
+        work
         .sort_values(
             "Reviewed",
             ascending=True,
@@ -1962,6 +2862,13 @@ def fig_qc_reviewer(
             marker=dict(
                 color=GREEN,
             ),
+
+            hovertemplate=(
+                "<b>%{y}</b>"
+                "<br>"
+                "Approved: %{x:,}"
+                "<extra></extra>"
+            ),
         )
     )
 
@@ -1985,32 +2892,44 @@ def fig_qc_reviewer(
             marker=dict(
                 color=RED,
             ),
+
+            hovertemplate=(
+                "<b>%{y}</b>"
+                "<br>"
+                "Rejected: %{x:,}"
+                "<extra></extra>"
+            ),
         )
     )
 
 
     fig.update_layout(
 
-        barmode="stack",
-
         title=(
             "QA Reviewer Workload & Outcomes"
         ),
+
+        barmode="stack",
+
+        bargap=0.27,
 
         xaxis_title=(
             "Reviewed records"
         ),
 
         yaxis_title="",
-
-        bargap=0.26,
     )
 
 
     return _layout(
+
         fig,
+
         height=480,
+
         legend_y=1.02,
+
+        top_margin=118,
     )
 
 
@@ -2026,20 +2945,47 @@ def fig_category_bar(
 ):
 
     if (
-        data is None
-        or data.empty
+        _is_empty(data)
+        or category not in data.columns
+        or value not in data.columns
     ):
 
-        return _layout(
-            go.Figure(),
-            height=410,
-            showlegend=False,
+        return _empty_figure(
+            title
         )
 
 
     work = (
+        data.copy()
+    )
 
-        data
+
+    work[value] = (
+        _safe_numeric(
+            work[value]
+        )
+    )
+
+
+    work[category] = (
+
+        work[
+            category
+        ]
+        .fillna(
+            "Unknown"
+        )
+        .astype(str)
+        .replace(
+            "",
+            "Unknown",
+        )
+    )
+
+
+    work = (
+
+        work
         .sort_values(
             value,
             ascending=True,
@@ -2100,14 +3046,19 @@ def fig_category_bar(
 
         yaxis_title="",
 
-        bargap=0.24,
+        bargap=0.25,
     )
 
 
     return _layout(
+
         fig,
-        height=440,
+
+        height=450,
+
         showlegend=False,
+
+        top_margin=92,
     )
 
 
@@ -2122,29 +3073,46 @@ def fig_sunburst(
     level3: str,
 ):
 
-    if (
-        data is None
-        or data.empty
+    required = [
+        level1,
+        level2,
+        level3,
+    ]
+
+
+    if not _has_columns(
+        data,
+        required,
     ):
 
-        return _layout(
-            go.Figure(),
-            height=470,
-            showlegend=False,
+        return _empty_figure(
+            "Moraa Phase → Discipline → QA Status"
         )
 
 
     work = (
-        data
+        data[
+            required
+        ]
         .copy()
-        .replace(
-            "",
-            "Unknown",
-        )
         .fillna(
             "Unknown"
         )
     )
+
+
+    for column in required:
+
+        work[column] = (
+
+            work[column]
+            .astype(str)
+            .str.strip()
+            .replace(
+                "",
+                "Unknown",
+            )
+        )
 
 
     fig = px.sunburst(
@@ -2178,16 +3146,20 @@ def fig_sunburst(
     fig.update_layout(
 
         title=(
-            "Moraa Phase → "
-            "Discipline → QA Status"
+            "Moraa Phase → Discipline → QA Status"
         ),
     )
 
 
     return _layout(
+
         fig,
-        height=490,
+
+        height=500,
+
         showlegend=False,
+
+        top_margin=92,
     )
 
 
@@ -2200,43 +3172,43 @@ def fig_quality_components(
     title="QA Component Profile",
 ):
 
-    if (
-        quality is None
-        or quality.empty
+    required = [
+        "Metric",
+        "Average",
+    ]
+
+
+    if not _has_columns(
+        quality,
+        required,
     ):
 
-        fig = go.Figure()
+        return _empty_figure(
 
+            title,
 
-        fig.add_annotation(
-
-            text=(
-                "No numeric component scores "
-                "are available in this view"
-            ),
-
-            showarrow=False,
-
-            font=dict(
-                color=MUTED,
-                size=13,
+            (
+                "No numeric QA component scores "
+                "are available in this view."
             ),
         )
 
 
-        fig.update_layout(
-            title=title
+    work = (
+        quality.copy()
+    )
+
+
+    work["Average"] = (
+        _safe_numeric(
+            work[
+                "Average"
+            ]
         )
+    )
 
 
-        return _layout(
-            fig,
-            height=440,
-            showlegend=False,
-        )
-
-
-    chart_colors = [
+    colors = [
 
         BLUE,
 
@@ -2247,6 +3219,22 @@ def fig_quality_components(
         GREEN,
 
         AMBER,
+
+        "#14B8A6",
+    ]
+
+
+    bar_colors = [
+
+        colors[
+            index
+            % len(colors)
+        ]
+
+        for index
+        in range(
+            len(work)
+        )
     ]
 
 
@@ -2254,18 +3242,16 @@ def fig_quality_components(
 
         go.Bar(
 
-            x=quality[
+            x=work[
                 "Metric"
             ],
 
-            y=quality[
+            y=work[
                 "Average"
             ],
 
-            marker_color=(
-                chart_colors[
-                    : len(quality)
-                ]
+            marker=dict(
+                color=bar_colors,
             ),
 
             text=[
@@ -2273,7 +3259,7 @@ def fig_quality_components(
                 f"{value:.2f}"
 
                 for value
-                in quality[
+                in work[
                     "Average"
                 ]
             ],
@@ -2310,34 +3296,56 @@ def fig_quality_components(
 
 
     return _layout(
+
         fig,
-        height=450,
+
+        height=460,
+
         showlegend=False,
+
+        top_margin=92,
     )
 
 
 # ============================================================
-# CALENDAR / COLLECTION INTENSITY HEATMAP
+# COLLECTION INTENSITY HEATMAP
 # ============================================================
 
 def fig_calendar_heatmap(
     calendar_data: pd.DataFrame,
 ):
 
-    if (
-        calendar_data is None
-        or calendar_data.empty
+    required = [
+
+        "Weekday",
+
+        "Month",
+
+        "Records",
+    ]
+
+
+    if not _has_columns(
+        calendar_data,
+        required,
     ):
 
-        return _layout(
-            go.Figure(),
-            height=440,
-            showlegend=False,
+        return _empty_figure(
+            "Collection Intensity Heatmap"
         )
 
 
     work = (
         calendar_data.copy()
+    )
+
+
+    work["Records"] = (
+        _safe_numeric(
+            work[
+                "Records"
+            ]
+        )
     )
 
 
@@ -2418,9 +3426,15 @@ def fig_calendar_heatmap(
 
             z=pivot.values,
 
-            x=pivot.columns,
+            x=pivot.columns.tolist(),
 
-            y=pivot.index,
+            y=pivot.index.tolist(),
+
+            text=pivot.values,
+
+            texttemplate=(
+                "%{text}"
+            ),
 
             colorscale=[
 
@@ -2442,26 +3456,26 @@ def fig_calendar_heatmap(
 
             colorbar=dict(
 
-                title="Records",
+                title=dict(
+
+                    text="Records",
+
+                    font=dict(
+                        color=MUTED,
+                        size=11,
+                    ),
+                ),
+
+                tickfont=dict(
+                    color=MUTED,
+                    size=10,
+                ),
 
                 thickness=10,
 
                 len=0.78,
 
-                tickfont=dict(
-                    color=MUTED,
-                ),
-            ),
-
-            text=pivot.values,
-
-            texttemplate=(
-                "%{text}"
-            ),
-
-            textfont=dict(
-                color="#FFFFFF",
-                size=10,
+                outlinewidth=0,
             ),
 
             hovertemplate=(
@@ -2470,6 +3484,10 @@ def fig_calendar_heatmap(
                 "Records: %{z:,}"
                 "<extra></extra>"
             ),
+
+            xgap=2,
+
+            ygap=2,
         )
     )
 
@@ -2482,8 +3500,28 @@ def fig_calendar_heatmap(
     )
 
 
+    fig.update_xaxes(
+        showgrid=False,
+    )
+
+
+    fig.update_yaxes(
+        showgrid=False,
+    )
+
+
     return _layout(
+
         fig,
-        height=450,
+
+        height=460,
+
         showlegend=False,
+
+        margin=dict(
+            l=85,
+            r=70,
+            t=92,
+            b=35,
+        ),
     )
